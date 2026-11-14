@@ -1,0 +1,262 @@
+/*
+ * Fight or Flight design tokens. Supervisor-owned. Rationale: docs/DESIGN.md.
+ *
+ * Import AFTER `@import "tailwindcss";` in the app entry stylesheet.
+ * Layout: 1) theme-dependent values as shadcn-named variables on :root (light)
+ * and .dark (night, the primary theme), 2) `@theme inline` mapping them to
+ * Tailwind utilities, 3) `@theme` for static scales.
+ *
+ * Rule: chrome is monochrome. Hue is reserved for risk data and the SOS action.
+ */
+
+@custom-variant dark (&:is(.dark *));
+
+/* ───────────────────────── 1. Theme variables ───────────────────────── */
+
+:root {
+  color-scheme: light;
+
+  /* Surfaces and text (shadcn names) */
+  --background: #ffffff;
+  --foreground: #181818;
+  --card: #ffffff;
+  --card-foreground: #181818;
+  --popover: #ffffff;
+  --popover-foreground: #181818;
+  --primary: #181818;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f2;
+  --secondary-foreground: #181818;
+  --muted: #f4f4f2;
+  --muted-foreground: #5c5c5a; /* 6.7:1 on background, 6.1:1 on muted */
+  --accent: #eaeae7;
+  --accent-foreground: #181818;
+  --destructive: #c4262c; /* SOS and errors. 5.7:1 on background */
+  --destructive-foreground: #ffffff; /* 5.7:1 on destructive */
+  --border: #e4e4e1; /* decorative hairline */
+  --input: #8a8a87; /* control boundary, 3.5:1 on background */
+  --ring: #181818;
+
+  /* Floating chrome over the map (search bar, FABs, status pill) */
+  --surface-glass: rgb(255 255 255 / 0.82);
+  --surface-scrim: rgb(24 24 24 / 0.32);
+
+  /*
+   * Risk bands. 1 = lowest risk, 5 = highest.
+   * Fill is at least 3:1 on background, card and muted (WCAG 1.4.11).
+   * The paired foreground is at least 4.5:1 on its fill (WCAG 1.4.3).
+   * Hue runs blue to yellow to magenta, never red against green.
+   * Always pair with a label or icon from src/lib/risk.ts.
+   */
+  --risk-1: #1f6fbf;
+  --risk-1-foreground: #ffffff;
+  --risk-2: #1a9aaf;
+  --risk-2-foreground: #0b0b0b;
+  --risk-3: #a88400;
+  --risk-3-foreground: #0b0b0b;
+  --risk-4: #a63c00;
+  --risk-4-foreground: #ffffff;
+  --risk-5: #7a0c4e;
+  --risk-5-foreground: #ffffff;
+
+  /* Elevation. Light theme leans on shadow, night theme on a hairline. */
+  --shadow-color: 24 24 24;
+  --elev-1: 0 1px 2px rgb(var(--shadow-color) / 0.08);
+  --elev-2: 0 4px 12px rgb(var(--shadow-color) / 0.1), 0 1px 2px rgb(var(--shadow-color) / 0.06);
+  --elev-3: 0 12px 32px rgb(var(--shadow-color) / 0.16), 0 2px 6px rgb(var(--shadow-color) / 0.08);
+  --elev-sheet: 0 -8px 32px rgb(var(--shadow-color) / 0.14);
+
+  /* Theme-independent runtime values */
+  --radius: 0.5rem; /* shadcn base. lg = 8px, matching Tailwind defaults */
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+
+  /* Motion. Never shorter than 200ms, never a browser default curve. */
+  --duration-fast: 200ms; /* color and opacity */
+  --duration-base: 300ms; /* small transforms, press feedback release */
+  --duration-slow: 500ms; /* layout and position, sheet content swaps */
+  --motion-distance: 24px; /* enter and exit travel */
+  --motion-scale: 1; /* multiply any travel by this; 0 under reduced motion */
+
+  /* Stacking order for the single shell */
+  --z-map: 0;
+  --z-chrome: 10;
+  --z-sheet: 20;
+  --z-toast: 30;
+  --z-safety: 40;
+
+  /*
+   * 3D building materials (max 6). Baked into GLBs by tools/blender, so they
+   * do not switch with the theme. Low chroma on purpose: risk color must read
+   * on top of them. Selection highlight is a deck.gl tint using --ring, not a
+   * material.
+   */
+  --bldg-wall: #3b3e46; /* default massing */
+  --bldg-wall-warm: #4a4340; /* brick, the campus Romanesque blocks */
+  --bldg-roof: #2a2c32;
+  --bldg-glass: #5b6b7d;
+  --bldg-trim: #6b6e76; /* cornices, entrances, bevel edges */
+  --bldg-landmark: #8a8378; /* stone on the ~10 hero models */
+}
+
+.dark {
+  color-scheme: dark;
+
+  --background: #181818;
+  --foreground: #f2f2f0;
+  --card: #1f1f1f;
+  --card-foreground: #f2f2f0;
+  --popover: #1f1f1f;
+  --popover-foreground: #f2f2f0;
+  --primary: #f2f2f0;
+  --primary-foreground: #181818;
+  --secondary: #272727;
+  --secondary-foreground: #f2f2f0;
+  --muted: #272727;
+  --muted-foreground: #a3a3a0; /* 7.0:1 on background, 5.9:1 on muted */
+  --accent: #313131;
+  --accent-foreground: #f2f2f0;
+  --destructive: #d93036; /* 3.7:1 on background, non-text only */
+  --destructive-foreground: #ffffff; /* 4.7:1 on destructive */
+  --border: #313131; /* decorative hairline */
+  --input: #6e6e6e; /* control boundary, 3.5:1 on background */
+  --ring: #f2f2f0;
+
+  --surface-glass: rgb(24 24 24 / 0.72);
+  --surface-scrim: rgb(0 0 0 / 0.56);
+
+  /* Fill is at least 3.9:1 on background, card and muted. Foreground on fill is at least 5.1:1. */
+  --risk-1: #3b8fd9;
+  --risk-1-foreground: #0b0b0b;
+  --risk-2: #7dd3f5;
+  --risk-2-foreground: #0b0b0b;
+  --risk-3: #f2e24a;
+  --risk-3-foreground: #0b0b0b;
+  --risk-4: #f08a24;
+  --risk-4-foreground: #0b0b0b;
+  --risk-5: #e8456b;
+  --risk-5-foreground: #0b0b0b;
+
+  --shadow-color: 0 0 0;
+  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06);
+  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 16px rgb(var(--shadow-color) / 0.4);
+  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(var(--shadow-color) / 0.56);
+  --elev-sheet: 0 0 0 1px rgb(255 255 255 / 0.06), 0 -8px 32px rgb(var(--shadow-color) / 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    /* Movement collapses to a plain opacity change. */
+    --motion-distance: 0px;
+    --motion-scale: 0;
+    --duration-base: 200ms;
+    --duration-slow: 200ms;
+  }
+}
+
+/* ───────────────────── 2. Tailwind mapping (themeable) ───────────────────── */
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-glass: var(--surface-glass);
+  --color-scrim: var(--surface-scrim);
+
+  --color-risk-1: var(--risk-1);
+  --color-risk-1-foreground: var(--risk-1-foreground);
+  --color-risk-2: var(--risk-2);
+  --color-risk-2-foreground: var(--risk-2-foreground);
+  --color-risk-3: var(--risk-3);
+  --color-risk-3-foreground: var(--risk-3-foreground);
+  --color-risk-4: var(--risk-4);
+  --color-risk-4-foreground: var(--risk-4-foreground);
+  --color-risk-5: var(--risk-5);
+  --color-risk-5-foreground: var(--risk-5-foreground);
+
+  --color-bldg-wall: var(--bldg-wall);
+  --color-bldg-wall-warm: var(--bldg-wall-warm);
+  --color-bldg-roof: var(--bldg-roof);
+  --color-bldg-glass: var(--bldg-glass);
+  --color-bldg-trim: var(--bldg-trim);
+  --color-bldg-landmark: var(--bldg-landmark);
+
+  /* Radius: resolves to Tailwind's own steps (4, 6, 8, 12). 2xl, 3xl, full stay default. */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  /* Shadows: shadow-float (FABs, search), shadow-raised (cards), shadow-sheet, shadow-overlay */
+  --shadow-raised: var(--elev-1);
+  --shadow-float: var(--elev-2);
+  --shadow-overlay: var(--elev-3);
+  --shadow-sheet: var(--elev-sheet);
+}
+
+/* ───────────────────────── 3. Static scales ───────────────────────── */
+
+@theme {
+  /* One typeface. Mono only for numeric UI (ETA, distance, scores). */
+  --font-sans: "Geist Variable", "Geist", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", "Geist Mono", ui-monospace, monospace;
+
+  /* Type scale: the Tailwind steps this app is allowed to use. 16px floor on inputs. */
+  --text-xs: 0.75rem; /* 12 / 16  caption */
+  --text-xs--line-height: calc(1 / 0.75);
+  --text-sm: 0.875rem; /* 14 / 20  body small, chips, sublabels */
+  --text-sm--line-height: calc(1.25 / 0.875);
+  --text-base: 1rem; /* 16 / 24  body, inputs, buttons */
+  --text-base--line-height: calc(1.5 / 1);
+  --text-lg: 1.125rem; /* 18 / 28  sheet row titles */
+  --text-lg--line-height: calc(1.75 / 1.125);
+  --text-xl: 1.25rem; /* 20 / 28  sheet titles */
+  --text-xl--line-height: calc(1.75 / 1.25);
+  --text-2xl: 1.5rem; /* 24 / 32  one hero figure per sheet (ETA, building name) */
+  --text-2xl--line-height: calc(2 / 1.5);
+  --text-3xl: 1.875rem; /* 30 / 36  full-sheet headings only */
+  --text-3xl--line-height: calc(2.25 / 1.875);
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600; /* ceiling. No bold or black. */
+
+  /*
+   * Spacing: 4px base. Allowed steps are 0, 0.5, 1, 2, 3, 4, 6, 8, 10, 12, 16, 20, 24
+   * (0, 2, 4, 8, 12, 16, 24, 32, 40, 48, 64, 80, 96 px). Named steps below.
+   */
+  --spacing: 0.25rem;
+  --spacing-tap: 2.75rem; /* 44px minimum tap target: size-tap, min-h-tap */
+  --spacing-fab: 3.5rem; /* 56px FAB: size-fab */
+  --spacing-gutter: 1rem; /* 16px screen edge inset */
+  --spacing-sheet-peek: 6rem; /* 96px collapsed sheet, excluding safe area */
+
+  --blur-glass: 16px; /* backdrop-blur-glass, with bg-glass */
+
+  /* Easing: ease-settle is the base curve. No ease, linear or ease-in-out. */
+  --ease-settle: cubic-bezier(0.22, 1, 0.36, 1); /* decelerate into place */
+  --ease-exit: cubic-bezier(0.4, 0, 1, 1); /* leaving the screen */
+  --ease-emphasis: cubic-bezier(0.34, 1.3, 0.64, 1); /* slight overshoot, showpiece only */
+
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}

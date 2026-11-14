@@ -1,0 +1,21 @@
+{
+  "bounds": {
+    "campus": [-118.2925, 34.0175, -118.2795, 34.0265],
+    "walk": [-118.325, 33.99, -118.245, 34.055],
+    "ride": [-118.46, 33.878, -118.11, 34.167]
+  },
+  "center": [-118.2851, 34.0224],
+  "basemap": { "kind": "style", "url": "https://tiles.openfreemap.org/styles/positron" },
+  "features": {
+    "buildings": true,
+    "rooms": true,
+    "search": true,
+    "pois": true,
+    "risk": true,
+    "routing": true,
+    "events": true,
+    "models3d": false
+  },
+  "riskResolutions": [8, 9, 10],
+  "dataUpdatedAt": "2026-11-14T08:00:00Z"
+}
