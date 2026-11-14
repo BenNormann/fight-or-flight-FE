@@ -1,3 +1,5 @@
+import '@fontsource-variable/geist'
+import '@fontsource-variable/geist-mono'
 import { RouterProvider } from 'react-router'
 import { Providers } from './providers'
 import { router } from './router'
