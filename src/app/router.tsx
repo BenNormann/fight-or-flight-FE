@@ -1,18 +1,19 @@
 import { createBrowserRouter } from 'react-router'
 import { Shell } from './Shell'
+import { DirectionsFromUrl, HomeFromUrl, SelectFromUrl } from './UrlRoutes'
 
 /**
- * Four routes, one shell. Routes only set selection (P2); the map never unmounts.
- * Events, layers and settings are sheet states, not routes.
+ * Four routes, one shell. Routes only set selection; the map never unmounts.
+ * Events, layers, search and safety are sheet states at `/`, not routes.
  */
 export const router = createBrowserRouter([
   {
     element: <Shell />,
     children: [
-      { path: '/', element: null },
-      { path: '/b/:buildingId', element: null },
-      { path: '/r/:roomId', element: null },
-      { path: '/route', element: null },
+      { path: '/', element: <HomeFromUrl /> },
+      { path: '/b/:buildingId', element: <SelectFromUrl kind="building" /> },
+      { path: '/r/:roomId', element: <SelectFromUrl kind="room" /> },
+      { path: '/route', element: <DirectionsFromUrl /> },
       { path: '*', element: null },
     ],
   },

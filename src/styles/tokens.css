@@ -37,6 +37,10 @@
   --input: #8a8a87; /* control boundary, 3.5:1 on background */
   --ring: #181818;
 
+  /* The one accent: primary map actions only (Directions, Start). 6.3:1 with its foreground. */
+  --brand: #0b6e45;
+  --brand-foreground: #ffffff;
+
   /* Floating chrome over the map (search bar, FABs, status pill) */
   --surface-glass: rgb(255 255 255 / 0.82);
   --surface-scrim: rgb(24 24 24 / 0.32);
@@ -125,6 +129,9 @@
   --input: #6e6e6e; /* control boundary, 3.5:1 on background */
   --ring: #f2f2f0;
 
+  --brand: #3ccf8e; /* 9.9:1 with its foreground */
+  --brand-foreground: #0b0b0b;
+
   --surface-glass: rgb(24 24 24 / 0.72);
   --surface-scrim: rgb(0 0 0 / 0.56);
 
@@ -179,6 +186,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
   --color-glass: var(--surface-glass);
   --color-scrim: var(--surface-scrim);
 
@@ -260,3 +269,21 @@
   --default-transition-duration: 200ms;
   --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* ───────────────────────── 4. Text styles ─────────────────────────
+ * Named styles (docs/DESIGN.md §1). Apply these, never a loose size + weight.
+ */
+@utility heading-4 { font-size: var(--text-3xl); line-height: var(--text-3xl--line-height); font-weight: 600; letter-spacing: -0.02em; text-wrap: balance; }
+@utility heading-5 { font-size: var(--text-2xl); line-height: var(--text-2xl--line-height); font-weight: 600; letter-spacing: -0.015em; text-wrap: balance; }
+@utility heading-6 { font-size: var(--text-xl); line-height: var(--text-xl--line-height); font-weight: 600; letter-spacing: -0.01em; text-wrap: balance; }
+@utility title-2 { font-size: var(--text-lg); line-height: var(--text-lg--line-height); font-weight: 500; }
+@utility title-3 { font-size: var(--text-base); line-height: var(--text-base--line-height); font-weight: 500; }
+@utility title-4 { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 500; }
+@utility body-3 { font-size: var(--text-base); line-height: var(--text-base--line-height); font-weight: 400; text-wrap: pretty; }
+@utility body-5 { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 500; text-wrap: pretty; }
+@utility body-6 { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; text-wrap: pretty; }
+@utility button-md { font-size: var(--text-base); line-height: var(--text-base--line-height); font-weight: 600; }
+@utility button-sm { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 600; }
+@utility caption-3 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 600; }
+@utility caption-4 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 500; }
+@utility caption-5 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; }

@@ -2,9 +2,8 @@ import { useLayoutEffect, useState, type ReactNode } from 'react'
 import type { SheetSnap } from '@/domain'
 import { cn } from '@/lib/cn'
 import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/ui/vendor/drawer'
+import { SHEET_PEEK_PX } from './layout'
 
-/** Collapsed height above the home indicator, matching `--spacing-sheet-peek`. */
-export const SHEET_PEEK_PX = 96
 const HALF = 0.5
 const FULL = 1
 
@@ -29,18 +28,20 @@ function useSafeBottom() {
 export interface BottomSheetProps {
   snap: SheetSnap
   onSnapChange: (snap: SheetSnap) => void
-  /** Accessible title; also shown unless `header` replaces it. */
+  /** Accessible name for the sheet. The view inside renders its own visible heading. */
   title: string
   description?: string
-  header?: ReactNode
   children?: ReactNode
+  /** Tablet: a floating card on the left instead of edge to edge. */
+  floating?: boolean
 }
 
 /**
- * The one non-modal sheet over the map: peek / half / full. The map stays
- * interactive behind it. Vaul owns drag physics; the store owns the snap.
+ * The one non-modal sheet over the map (mobile and tablet): peek / half / full.
+ * The map stays interactive behind it. Vaul owns drag physics; the store owns the snap.
+ * Loaded lazily so desktop never downloads vaul.
  */
-export function BottomSheet({ snap, onSnapChange, title, description, header, children }: BottomSheetProps) {
+export default function BottomSheet({ snap, onSnapChange, title, description, children, floating }: BottomSheetProps) {
   const safeBottom = useSafeBottom()
   const peek = `${SHEET_PEEK_PX + safeBottom}px`
   const points: (string | number)[] = [peek, HALF, FULL]
@@ -62,33 +63,29 @@ export function BottomSheet({ snap, onSnapChange, title, description, header, ch
         data-snap={snap}
         aria-describedby={undefined}
         className={cn(
-          'z-(--z-sheet) mx-auto h-full w-full max-w-xl outline-none',
+          'z-(--z-sheet) h-full w-full outline-none',
           'data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-full',
           'data-[vaul-drawer-direction=bottom]:rounded-t-3xl data-[vaul-drawer-direction=bottom]:border-x data-[vaul-drawer-direction=bottom]:border-t',
           'border-border bg-card text-card-foreground shadow-sheet',
+          floating ? 'data-[vaul-drawer-direction=bottom]:left-4 data-[vaul-drawer-direction=bottom]:right-auto md:w-100' : 'mx-auto',
         )}
       >
+        <DrawerTitle className="sr-only">{title}</DrawerTitle>
+        {description ? <DrawerDescription className="sr-only">{description}</DrawerDescription> : null}
         <button
           type="button"
-          aria-label={snap === 'peek' ? 'Expand sheet' : 'Collapse sheet'}
-          onClick={() => onSnapChange(snap === 'peek' ? 'half' : 'peek')}
+          aria-label={snap === 'full' ? 'Collapse sheet' : 'Expand sheet'}
+          onClick={() => onSnapChange(snap === 'peek' ? 'half' : snap === 'half' ? 'full' : 'peek')}
           className="mx-auto flex h-6 w-24 shrink-0 cursor-grab items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <span aria-hidden className="h-1 w-10 rounded-full bg-input/60" />
         </button>
-        {header ?? (
-          <div className="px-gutter pb-3">
-            <DrawerTitle className="text-xl font-semibold tracking-tight">{title}</DrawerTitle>
-            {description ? <DrawerDescription className="mt-0.5">{description}</DrawerDescription> : null}
-          </div>
-        )}
-        {header ? <DrawerTitle className="sr-only">{title}</DrawerTitle> : null}
         <div
           className={cn(
-            'min-h-0 flex-1 px-gutter',
+            'min-h-0 flex-1 px-gutter pt-1',
             snap === 'full' ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden',
           )}
-          style={{ paddingBottom: 'calc(var(--safe-bottom) + 96px)' }}
+          style={{ paddingBottom: 'calc(var(--safe-bottom) + 32px)' }}
         >
           {children}
         </div>

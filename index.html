@@ -6,6 +6,18 @@
     <meta name="theme-color" content="#0b0d10" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <title>Fight or Flight</title>
+    <script>
+      // Theme before first paint (mirrors src/ui/theme.ts): stored mode, else night 18:00 to 06:00.
+      ;(function () {
+        var m = 'auto'
+        try { m = localStorage.getItem('fof.theme') || 'auto' } catch (e) {}
+        var h = new Date().getHours()
+        var dark = m === 'dark' || (m !== 'light' && (h >= 18 || h < 6))
+        if (dark) document.documentElement.classList.add('dark')
+        var meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', dark ? '#181818' : '#ffffff')
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,54 +1,60 @@
 # Backend contract
 
-**Status: PROPOSED by the frontend. Nothing has been checked against a real backend.**
-Last checked: 2026-11-14 (no backend repo or API URL known yet).
+**Status: endpoint list supplied by the product owner on 2026-11-14. Paths and purposes only.**
+Response shapes, base URL, auth and parameter formats are NOT known yet. Nothing here has been checked against a running backend. Do not write adapters from guesses: wait for sample responses.
 
-This file records what the backend actually serves. Until a backend exists it holds our proposal, to share with the backend team. It is a starting point, not a requirement: the frontend adapters (`src/api/adapters`) absorb differences, so the backend team should serve what is natural for them and tell us.
+The backend is a data-ingestion and ML-feature API over H3 cells. It is not (yet) a map-app API.
 
-## Conventions (proposed)
+## Served (as described by the backend team)
 
-- JSON, gzip. All paths under `/api`.
-- Coordinates are `[lng, lat]` (GeoJSON order). Bounding boxes are `[west, south, east, north]`.
-- Times are ISO-8601 with offset. Risk scores are 0 (safest) to 1 (riskiest).
-- An endpoint that is not implemented should return 404 or 501; the frontend then hides that feature.
-- Additive changes only. Renames or removals: tell the frontend first.
-
-## Endpoints (proposed)
-
-| # | Method & path | Returns | FE status |
+| Method | Path | Purpose | FE use |
 |---|---|---|---|
-| 1 | `GET /api/config` | `{ bounds: {campus, walk, ride: bbox}, center, basemap, features, riskResolutions, dataUpdatedAt }` | adapter + fixture done |
-| 2 | `GET /api/buildings` | GeoJSON FeatureCollection of footprints; properties `{id, code, name, floors, heightM, entrances: [{id, lngLat, accessible?}]}` | P1 |
-| 3 | `GET /api/buildings/:id/rooms?floor=` | `[{id, name, floor, type, capacity}]` | P1 |
-| 4 | `GET /api/search?q=` | `[{kind: building\|room\|poi\|event, id, label, sublabel, lngLat}]` | P1 |
-| 5 | `GET /api/pois?types=&bbox=` | GeoJSON FeatureCollection of points; properties `{id, type, name?}`. Types: `blue_light, dps, entrance, bike_rack, seating` | P1 |
-| 6 | `GET /api/risk?res=&bbox=&at=` | `[{h3, score, factors: {crime, lighting, crowd, weather}}]` | P1 |
-| 7 | `POST /api/route` body `{from, to, at}` | `{routes: [{kind: safest\|fastest, geometry: LineString, durationS, distanceM, risk: {mean, max}, segments: [{geometry, score}], warnings: []}]}` | P1 |
-| 8 | `GET /api/events?from=&to=` | `[{id, title, start, end, location, buildingId?, lngLat?, url}]` (USC Engage SC via the backend) | P1 |
+| GET | `/health` | DB status, last successful run per ingestor | Reachability check; data freshness label |
+| GET | `/cells?bbox=` | H3 cells with static features | Cell grid for map layers |
+| GET | `/observations?cells=&bbox=&metric=&from=&to=&bucket=1m\|10m\|1h` | Time-bucketed observations | History for a tapped cell (chart) |
+| GET | `/observations/latest?bbox=&metric=` | Latest value per cell | Live hex layer per metric |
+| GET | `/incidents?bbox=&from=&to=&category=` | Crime points | Incident pins / list |
+| GET | `/features?bbox=&from=&to=&bucket=10m` | ML feature matrix per (h3_cell, bucket); JSON, or `?format=csv\|parquet` | None. Training data, not for the app |
+| GET | `/buildings.pmtiles` | 3D building tiles (static, range requests) | Building footprints / extrusions via the `pmtiles` protocol |
+| GET | `/sources` | Ingestion sources, intervals, last run times | Optional "data sources" info |
+| POST | `/admin/ingest/{source}` | Manually trigger an ingestor | **Never called by the FE** |
 
-### 1. Config details
+Notes:
+- Paths have no `/api` prefix. The dev proxy and `apiFetch` paths must change once the base URL is known.
+- There is no config endpoint. Bounds, centre and basemap must come from FE env/defaults; capabilities must be inferred (for example from `/health` or `/sources`).
 
-- `basemap`: any of `{kind: "style", url}`, `{kind: "vector", tiles: [...]}`, `{kind: "raster", tiles: [...]}`, `{kind: "pmtiles", url}`. A bare `styleUrl` or `tileUrl` string is also accepted.
-- `features`: which of `buildings, rooms, search, pois, risk, routing, events, models3d` are served, as a list or a `{name: boolean}` map. Anything not listed is hidden in the app.
-- `bounds`: `campus` = full detail, `walk` = risk and routing, `ride` = basemap and ride links (about 10 miles). A single bbox is accepted.
+## Not served (gaps against v1 product scope)
 
-## Formats the adapters will accept
+| Product feature | Needs | Status |
+|---|---|---|
+| Risk heatmap with "why" breakdown | A risk score (0 to 1) per cell with factors | **Gap.** Only raw observations and ML features are served. The FE must not compute risk. Could show a raw metric per cell instead |
+| Safe routing (safest vs fastest) | A route endpoint | **Gap.** Blocks the directions feature |
+| Search | A search endpoint or a searchable building list | **Gap** |
+| Building details, floors, rooms | Building attributes and room lists as JSON | **Gap.** Buildings exist only as tiles; attributes inside the tiles are unknown |
+| POIs (blue lights, DPS, entrances, bike racks, seating) | A POI endpoint | **Gap** (some may be static features of `/cells`) |
+| Events | An events endpoint | **Gap** |
+| Basemap | Streets/labels tiles | **Gap.** Only building tiles are served; the FE needs its own basemap source |
+
+## Open questions for the backend team
+
+1. Base URL (dev and prod), and is there auth or CORS setup?
+2. One sample response per endpoint (`/cells`, `/observations/latest`, `/incidents`, `/health`, `/sources`).
+3. `bbox` format (`west,south,east,north`?), time format, and the H3 resolution(s) of cells.
+4. The list of `metric` names and incident `category` values.
+5. `buildings.pmtiles`: layer name(s), zoom range, and attributes per building (id, name, code, height, floors?).
+6. Is a served risk score planned (model inference output per cell), and a routing endpoint? If not, who owns them?
+7. Are rooms, POIs, events and search planned in this API, or should they come from elsewhere?
+8. Is there an OpenAPI spec (FastAPI-style `/openapi.json`)?
+
+## Formats the adapters will accept (when shapes are known)
 
 | Data | Accepted |
 |---|---|
-| Route geometry | GeoJSON LineString, encoded polyline, or a list of H3 cells |
-| Risk | H3 cell ids, or GeoJSON polygons with a score |
-| Buildings | GeoJSON, or plain JSON with coordinates |
-| Map tiles | style URL, vector tiles, raster tiles, PMTiles |
-| 3D models | none expected; if the backend later serves them, a new adapter feeds the existing manifest shape |
+| Cells / per-cell values | H3 cell ids with values, or GeoJSON polygons |
+| Incidents | GeoJSON points, or JSON with lat/lng |
+| Buildings | PMTiles vector layer (served), GeoJSON, or plain JSON |
+| Route geometry (if ever served) | GeoJSON LineString, encoded polyline, or H3 cell list |
 
-## Actually served
+## History
 
-Nothing yet.
-
-## Gaps and open questions for the backend team
-
-1. Backend repo URL and/or a live API URL (and an OpenAPI spec path, if any).
-2. Will the backend serve map tiles, and in which format?
-3. Is risk served per H3 cell, and at which resolutions?
-4. Can sample responses be committed per endpoint so mock fixtures are rebuilt from real data?
+- 2026-11-14: replaced the FE's original proposal (config, buildings, rooms, search, pois, risk, route, events under `/api`) with the backend's actual endpoint list. The existing `config` adapter, fixture and mock handler follow the old proposal and are now obsolete; they stay only so the app boots in mock mode until real samples arrive.
