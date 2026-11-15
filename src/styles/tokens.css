@@ -6,7 +6,9 @@
  * and .dark (night, the primary theme), 2) `@theme inline` mapping them to
  * Tailwind utilities, 3) `@theme` for static scales.
  *
- * Rule: chrome is monochrome. Hue is reserved for risk data and the SOS action.
+ * Rule: chrome is neutral. Cardinal (#990000) is the one action fill, gold
+ * (#FFCC00) is the selected and signature ink. Risk hues are map data only,
+ * signal red is SOS and errors only. Separation rules: docs/DESIGN.md §1.
  */
 
 @custom-variant dark (&:is(.dark *));
@@ -31,15 +33,53 @@
   --muted-foreground: #5c5c5a; /* 6.7:1 on background, 6.1:1 on muted */
   --accent: #eaeae7;
   --accent-foreground: #181818;
-  --destructive: #c4262c; /* SOS and errors. 5.7:1 on background */
-  --destructive-foreground: #ffffff; /* 5.7:1 on destructive */
+  --destructive: #d4162b; /* signal red: SOS and errors only. Brighter than cardinal, always with icon + label. 5.3:1 on background */
+  --destructive-foreground: #ffffff; /* 5.3:1 on destructive */
   --border: #e4e4e1; /* decorative hairline */
   --input: #8a8a87; /* control boundary, 3.5:1 on background */
   --ring: #181818;
 
-  /* The one accent: primary map actions only (Directions, Start). 6.3:1 with its foreground. */
-  --brand: #0b6e45;
+  /*
+   * Brand. Cardinal is the action fill in both themes; gold is ink.
+   * white on cardinal 8.9:1, gold on cardinal 5.9:1, cardinal on background 8.9:1.
+   * Gold on a light surface is 1.5:1: in the light theme gold is a fill under
+   * dark ink only, never text, icon or boundary.
+   */
+  --brand: #990000; /* primary action fill: Directions, Start, the one main button per view */
   --brand-foreground: #ffffff;
+  --brand-hover: #7f0000; /* white 11.0:1 */
+  --brand-pressed: #660000;
+  --brand-accent: #ffcc00; /* glyph on a brand fill (FAB arrow, route pill badge). 5.9:1 */
+  --brand-ink: #990000; /* brand as text, icon or ring on neutral surfaces */
+  --brand-subtle: #fbeeee; /* tinted surface. brand-ink on it 7.9:1 */
+  --brand-subtle-foreground: #990000;
+
+  --gold: #ffcc00;
+  --gold-foreground: #181818; /* 11.7:1 */
+  --gold-hover: #f0bd00; /* 10.1:1 with its foreground */
+  --gold-pressed: #dbac00; /* 8.4:1 */
+  --gold-subtle: #fff6d1; /* tinted surface (saved, featured, tonight) */
+  --gold-subtle-foreground: #6b5200; /* 6.8:1 on gold-subtle, 7.4:1 on background */
+
+  /* Selected state (pressed chip, switch on, active tab, selected pin and ring). Cardinal by day, gold by night. */
+  --selected: #990000;
+  --selected-foreground: #ffffff;
+  --selected-hover: #7f0000;
+
+  /*
+   * Map palette, the default for the basemap style and the placeholder plane.
+   * Warm sandstone and brick, low chroma so risk colour reads on top.
+   */
+  --map-land: #f3efe6;
+  --map-block: #ebe5d8; /* campus ground, plazas */
+  --map-building: #dccfb9;
+  --map-building-edge: #b9a98c;
+  --map-road: #ffffff;
+  --map-path: #d9d2c3;
+  --map-green: #cfdfc0;
+  --map-water: #bcd6e4;
+  --map-label: #3d3a34; /* 9.9:1 on map-land */
+  --map-label-halo: #ffffff;
 
   /* Floating chrome over the map (search bar, FABs, status pill) */
   --surface-glass: rgb(255 255 255 / 0.82);
@@ -49,7 +89,8 @@
    * Risk bands. 1 = lowest risk, 5 = highest.
    * Fill is at least 3:1 on background, card and muted (WCAG 1.4.11).
    * The paired foreground is at least 4.5:1 on its fill (WCAG 1.4.3).
-   * Hue runs blue to yellow to magenta, never red against green.
+   * Hue runs blue to yellow to violet magenta, never red against green, and
+   * never inside the cardinal / signal red hue range (345 to 15 degrees).
    * Always pair with a label or icon from src/lib/risk.ts.
    */
   --risk-1: #1f6fbf;
@@ -58,17 +99,24 @@
   --risk-2-foreground: #0b0b0b;
   --risk-3: #a88400;
   --risk-3-foreground: #0b0b0b;
-  --risk-4: #a63c00;
+  --risk-4: #b45309; /* amber orange, pulled away from cardinal. white 5.0:1 */
   --risk-4-foreground: #ffffff;
-  --risk-5: #7a0c4e;
+  --risk-5: #86198f; /* violet magenta, pulled away from cardinal and signal red. white 8.2:1 */
   --risk-5-foreground: #ffffff;
 
-  /* Elevation. Light theme leans on shadow, night theme on a hairline. */
+  /*
+   * Elevation. Every level = 1px casing ring + contact shadow + ambient shadow.
+   * The ring replaces a CSS border on floating chrome: never border AND shadow.
+   * Shadows go on opaque surfaces only, never on bg-glass.
+   * elev-chip paints at most 8px outside the box, so an 8px padded scroller never clips it.
+   */
   --shadow-color: 24 24 24;
-  --elev-1: 0 1px 2px rgb(var(--shadow-color) / 0.08);
-  --elev-2: 0 4px 12px rgb(var(--shadow-color) / 0.1), 0 1px 2px rgb(var(--shadow-color) / 0.06);
-  --elev-3: 0 12px 32px rgb(var(--shadow-color) / 0.16), 0 2px 6px rgb(var(--shadow-color) / 0.08);
-  --elev-sheet: 0 -8px 32px rgb(var(--shadow-color) / 0.14);
+  --elev-1: 0 0 0 1px rgb(var(--shadow-color) / 0.06), 0 1px 2px rgb(var(--shadow-color) / 0.06);
+  --elev-chip: 0 0 0 1px rgb(var(--shadow-color) / 0.08), 0 1px 2px rgb(var(--shadow-color) / 0.1), 0 2px 6px rgb(var(--shadow-color) / 0.08);
+  --elev-2: 0 0 0 1px rgb(var(--shadow-color) / 0.06), 0 2px 4px rgb(var(--shadow-color) / 0.08), 0 8px 20px rgb(var(--shadow-color) / 0.12);
+  --elev-3: 0 0 0 1px rgb(var(--shadow-color) / 0.06), 0 4px 8px rgb(var(--shadow-color) / 0.08), 0 16px 40px rgb(var(--shadow-color) / 0.18);
+  --elev-sheet: 0 0 0 1px rgb(var(--shadow-color) / 0.06), 0 -2px 6px rgb(var(--shadow-color) / 0.06), 0 -12px 32px rgb(var(--shadow-color) / 0.12);
+  --elev-brand: 0 2px 4px rgb(153 0 0 / 0.2), 0 8px 20px rgb(153 0 0 / 0.28); /* cardinal fills that float (FAB) */
 
   /* Theme-independent runtime values */
   --radius: 0.5rem; /* shadcn base. lg = 8px, matching Tailwind defaults */
@@ -82,6 +130,10 @@
   --duration-fast: 200ms; /* color and opacity */
   --duration-base: 300ms; /* small transforms, press feedback release */
   --duration-slow: 500ms; /* layout and position, sheet content swaps */
+
+  /* Scroll edge fade for chip rows (mask-fade-x). Start = gutter, so the first chip rests clear of it. */
+  --fade-start: 16px;
+  --fade-end: 32px;
   --motion-distance: 24px; /* enter and exit travel */
   --motion-scale: 1; /* multiply any travel by this; 0 under reduced motion */
 
@@ -123,35 +175,70 @@
   --muted-foreground: #a3a3a0; /* 7.0:1 on background, 5.9:1 on muted */
   --accent: #313131;
   --accent-foreground: #f2f2f0;
-  --destructive: #d93036; /* 3.7:1 on background, non-text only */
-  --destructive-foreground: #ffffff; /* 4.7:1 on destructive */
+  --destructive: #ff5a52; /* signal coral: light fill, dark ink, the opposite polarity to cardinal. 5.8:1 on background */
+  --destructive-foreground: #0b0b0b; /* 6.4:1 on destructive */
   --border: #313131; /* decorative hairline */
   --input: #6e6e6e; /* control boundary, 3.5:1 on background */
   --ring: #f2f2f0;
 
-  --brand: #3ccf8e; /* 9.9:1 with its foreground */
-  --brand-foreground: #0b0b0b;
+  /*
+   * Cardinal stays the action fill (white 8.9:1, gold 5.9:1 on it) but is only
+   * 2.0:1 against night surfaces, so it never carries meaning alone here: brand
+   * fills take shadow-brand (light inner ring) and all brand ink turns gold.
+   */
+  --brand: #990000;
+  --brand-foreground: #ffffff;
+  --brand-hover: #b30d0d; /* white 7.1:1 */
+  --brand-pressed: #7f0000;
+  --brand-accent: #ffcc00;
+  --brand-ink: #ffcc00; /* 11.7:1 on background, 10.9:1 on card, 9.9:1 on muted, 8.6:1 on accent */
+  --brand-subtle: #131209; /* the warm black from the approved night list. gold on it 12.4:1 */
+  --brand-subtle-foreground: #ffcc00;
+
+  --gold: #ffcc00;
+  --gold-foreground: #181818;
+  --gold-hover: #f0bd00;
+  --gold-pressed: #dbac00;
+  --gold-subtle: #131209;
+  --gold-subtle-foreground: #ffcc00;
+
+  --selected: #ffcc00;
+  --selected-foreground: #181818; /* 11.7:1 */
+  --selected-hover: #f0bd00;
+
+  --map-land: #181818;
+  --map-block: #1f1f1f;
+  --map-building: #313131;
+  --map-building-edge: #4a4640;
+  --map-road: #272727;
+  --map-path: #3a3a3a;
+  --map-green: #1d2a20;
+  --map-water: #16242e;
+  --map-label: #f2f2f0;
+  --map-label-halo: #181818;
 
   --surface-glass: rgb(24 24 24 / 0.72);
   --surface-scrim: rgb(0 0 0 / 0.56);
 
-  /* Fill is at least 3.9:1 on background, card and muted. Foreground on fill is at least 5.1:1. */
+  /* Fill is at least 3.9:1 on background, card and muted. Foreground on fill is at least 5.1:1. Gold is never a risk fill. */
   --risk-1: #3b8fd9;
   --risk-1-foreground: #0b0b0b;
   --risk-2: #7dd3f5;
   --risk-2-foreground: #0b0b0b;
-  --risk-3: #f2e24a;
+  --risk-3: #e3ee6b; /* lemon lime, greener and paler than brand gold */
   --risk-3-foreground: #0b0b0b;
   --risk-4: #f08a24;
   --risk-4-foreground: #0b0b0b;
-  --risk-5: #e8456b;
+  --risk-5: #e052d8; /* violet magenta, 5.4:1 on background */
   --risk-5-foreground: #0b0b0b;
 
   --shadow-color: 0 0 0;
-  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.06);
-  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.06), 0 4px 16px rgb(var(--shadow-color) / 0.4);
-  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.08), 0 12px 32px rgb(var(--shadow-color) / 0.56);
-  --elev-sheet: 0 0 0 1px rgb(255 255 255 / 0.06), 0 -8px 32px rgb(var(--shadow-color) / 0.5);
+  --elev-1: 0 0 0 1px rgb(255 255 255 / 0.08);
+  --elev-chip: 0 0 0 1px rgb(255 255 255 / 0.1), 0 2px 6px rgb(var(--shadow-color) / 0.4);
+  --elev-2: 0 0 0 1px rgb(255 255 255 / 0.1), 0 2px 4px rgb(var(--shadow-color) / 0.3), 0 8px 20px rgb(var(--shadow-color) / 0.4);
+  --elev-3: 0 0 0 1px rgb(255 255 255 / 0.1), 0 4px 8px rgb(var(--shadow-color) / 0.3), 0 16px 40px rgb(var(--shadow-color) / 0.56);
+  --elev-sheet: 0 0 0 1px rgb(255 255 255 / 0.08), 0 -12px 32px rgb(var(--shadow-color) / 0.5);
+  --elev-brand: inset 0 0 0 1px rgb(255 255 255 / 0.2), 0 2px 4px rgb(var(--shadow-color) / 0.3), 0 8px 20px rgb(var(--shadow-color) / 0.4);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -188,6 +275,32 @@
   --color-ring: var(--ring);
   --color-brand: var(--brand);
   --color-brand-foreground: var(--brand-foreground);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-pressed: var(--brand-pressed);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-subtle: var(--brand-subtle);
+  --color-brand-subtle-foreground: var(--brand-subtle-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-gold-hover: var(--gold-hover);
+  --color-gold-pressed: var(--gold-pressed);
+  --color-gold-subtle: var(--gold-subtle);
+  --color-gold-subtle-foreground: var(--gold-subtle-foreground);
+  --color-selected: var(--selected);
+  --color-selected-foreground: var(--selected-foreground);
+  --color-selected-hover: var(--selected-hover);
+
+  --color-map-land: var(--map-land);
+  --color-map-block: var(--map-block);
+  --color-map-building: var(--map-building);
+  --color-map-building-edge: var(--map-building-edge);
+  --color-map-road: var(--map-road);
+  --color-map-path: var(--map-path);
+  --color-map-green: var(--map-green);
+  --color-map-water: var(--map-water);
+  --color-map-label: var(--map-label);
+  --color-map-label-halo: var(--map-label-halo);
   --color-glass: var(--surface-glass);
   --color-scrim: var(--surface-scrim);
 
@@ -215,8 +328,10 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
 
-  /* Shadows: shadow-float (FABs, search), shadow-raised (cards), shadow-sheet, shadow-overlay */
+  /* Shadows: shadow-raised (cards), shadow-chip (chips, pins, map labels), shadow-float (FABs, search), shadow-overlay, shadow-sheet, shadow-brand */
   --shadow-raised: var(--elev-1);
+  --shadow-chip: var(--elev-chip);
+  --shadow-brand: var(--elev-brand);
   --shadow-float: var(--elev-2);
   --shadow-overlay: var(--elev-3);
   --shadow-sheet: var(--elev-sheet);
@@ -287,3 +402,18 @@
 @utility caption-3 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 600; }
 @utility caption-4 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 500; }
 @utility caption-5 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 400; }
+@utility title-5 { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 500; }
+@utility body-4 { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 600; text-wrap: pretty; }
+@utility caption-1 { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 500; }
+@utility caption-2 { font-size: var(--text-sm); line-height: var(--text-sm--line-height); font-weight: 400; }
+@utility button-xsm { font-size: var(--text-xs); line-height: var(--text-xs--line-height); font-weight: 600; }
+
+/* ───────────────────────── 5. Component utilities ─────────────────────────
+ * mask-fade-x: scroll edge fade for horizontal rows (docs/DESIGN.md §3, chip row).
+ * A mask, not a background, so the flat background rule holds. Needs no JS:
+ * the start fade equals the row's inline padding, so content at rest is clear of it.
+ */
+@utility mask-fade-x {
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--fade-start), #000 calc(100% - var(--fade-end)), transparent 100%);
+}
