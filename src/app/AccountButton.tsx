@@ -6,11 +6,12 @@ import { useCapability } from '@/api/capabilities'
 import { useSession, useSignOut } from '@/api/queries'
 import { cn } from '@/lib/cn'
 import { useAppStore } from '@/state/store'
-import { IconButton, Keystone, Menu, MenuTriggerStub, notify, type MenuEntry } from '@/ui'
+import { IconButton, Menu, MenuTriggerStub, notify, type MenuEntry } from '@/ui'
+import { HelmetMark } from './HelmetMark'
 
 /**
  * Top right account control. Signed out: sign-in icon → `/login`. Signed in: the email's first
- * letter on a cardinal circle, opening a menu with the email, location sharing and Sign out.
+ * letter on a cardinal circle wearing a gold open-face helmet, opening a menu with the email, location sharing and Sign out.
  * Hidden when the backend serves no auth.
  */
 export function AccountButton({ overMap = false }: { overMap?: boolean }) {
@@ -45,8 +46,9 @@ export function AccountButton({ overMap = false }: { overMap?: boolean }) {
   const triggerClassName = cn(overMap && 'bg-card shadow-float hover:bg-accent')
   const avatar = (
     <span aria-hidden className="title-4 relative grid size-8 place-items-center rounded-full bg-brand text-brand-foreground">
-      {initial}
-      <Keystone className="top-0 right-0" />
+      {/* Sits in the helmet's eye band and slit, just below the brow. */}
+      <span className="translate-y-[3px] text-[13px] leading-none">{initial}</span>
+      <HelmetMark />
     </span>
   )
   // Until the first tap, a static stand-in: the menu code (Base UI) loads only when it is opened.
