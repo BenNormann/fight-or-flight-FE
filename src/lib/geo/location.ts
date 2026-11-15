@@ -5,7 +5,8 @@
  * Sharing the position with the backend is separate (`useLiveLocation`).
  */
 import { useSyncExternalStore } from 'react'
-import type { LocationFix } from '@/domain'
+import type { LngLat, LocationFix } from '@/domain'
+import { demoMode } from '@/lib/demoMode'
 
 /**
  * `unknown`: not checked yet. `prompt`: the browser will ask. `granted` / `denied`: the user's answer.
@@ -82,9 +83,17 @@ function watch(g: Geolocation, highAccuracy = true) {
   )
 }
 
+const demoFix = (lngLat: LngLat): LocationFix => ({ lngLat, accuracyM: 5, at: new Date().toISOString() })
+
+/** Demo mode (src/lib/demoMode.ts): put "you" at a point instead of the device position. */
+export function setDemoPosition(lngLat: LngLat) {
+  set({ status: 'granted', fix: demoFix(lngLat), asking: false, reason: undefined })
+}
+
 /** Check the permission without prompting. Already allowed: start watching straight away. */
 export async function initLocation(): Promise<void> {
   if (state.status !== 'unknown') return
+  if (demoMode) return setDemoPosition(demoMode.start)
   const g = geo()
   if (!g) return set({ status: 'unsupported' })
   try {
@@ -112,6 +121,10 @@ export async function initLocation(): Promise<void> {
  * Always really asks, even after an earlier refusal: the user may have changed the setting since.
  */
 export function requestLocation(): Promise<LocationFix | null> {
+  if (demoMode) {
+    if (!state.fix) setDemoPosition(demoMode.start)
+    return Promise.resolve(state.fix)
+  }
   const g = geo()
   if (!g) {
     set({ status: 'unsupported' })

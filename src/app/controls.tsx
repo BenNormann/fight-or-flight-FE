@@ -1,4 +1,4 @@
-import { CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon } from '@phosphor-icons/react'
+import { CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon, VideoCameraIcon } from '@phosphor-icons/react'
 import { useSyncExternalStore } from 'react'
 import { cn } from '@/lib/cn'
 import {
@@ -15,6 +15,7 @@ import {
 import { useCategoryChips } from '@/state/places'
 import { useAppStore } from '@/state/store'
 import { Chip, ChipRow, IconButton, Keystone, SearchBar, CategoryIcon } from '@/ui'
+import { demoMode } from '@/lib/demoMode'
 
 /** Search pill bound to the store. Typing searches live; the results view's own header has the back arrow. */
 export function MapSearch({
@@ -152,6 +153,16 @@ export function ControlStack({ className, zoom = false }: { className?: string; 
         aria-pressed={view === 'safety'}
         onClick={() => openView(view === 'safety' ? 'explore' : 'safety')}
       />
+      {demoMode ? (
+        <IconButton
+          tone="float"
+          label="Demo tools"
+          icon={<VideoCameraIcon />}
+          aria-pressed={view === 'demo'}
+          data-testid="demo-open"
+          onClick={() => openView(view === 'demo' ? 'explore' : 'demo')}
+        />
+      ) : null}
       {zoom ? (
         <>
           <IconButton tone="float" label="Zoom in" icon={<PlusIcon />} onClick={zoomIn} />

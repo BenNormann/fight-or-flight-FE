@@ -8,6 +8,7 @@ import { useAppStore } from '@/state/store'
 import { SHEET_PEEK_PX, Toaster, useBreakpoint, useThemeController } from '@/ui'
 import NavAnnouncer from '@/features/route/NavAnnouncer'
 import { isLoginPath } from './authGate'
+import { useDemoIncidentWatcher } from './useDemoIncidentWatcher'
 import { useNavigationDriver } from './useNavigationDriver'
 import { DesktopLayout, TouchLayout } from './layouts'
 import { LocationPrompt } from './LocationPrompt'
@@ -53,6 +54,7 @@ export function Shell() {
   useStoreToUrl()
   useLiveLocation(useAppStore((s) => s.liveLocationOptIn))
   useNavigationDriver()
+  useDemoIncidentWatcher()
   const breakpoint = useBreakpoint()
   const config = useAppConfig()
   const capabilities = useCapabilities()

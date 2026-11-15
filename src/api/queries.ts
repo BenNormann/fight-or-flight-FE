@@ -4,11 +4,13 @@
  */
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
-import type { BBox, Id, LngLat, LocationFix, Place, RouteRequest, User } from '@/domain'
+import type { BBox, Id, LngLat, LocationFix, Place, RouteRequest, SimulatedIncident, User } from '@/domain'
+import { demoMode } from '@/lib/demoMode'
 import { env } from '@/lib/env'
 import { ApiError } from './client'
 import { fetchMe, logout } from './adapters/auth'
 import { fetchConfig } from './adapters/config'
+import { clearIncidents, fetchDemoIncidents, fetchDemoStatus, simulateIncident } from './adapters/demo'
 import { postLocation } from './adapters/location'
 import { fetchPlace, fetchPlaceCategories, reverseGeocode, searchPlaces } from './adapters/places'
 import { fetchRoutes } from './adapters/route'
@@ -25,6 +27,8 @@ export const queryKeys = {
   place: (id: Id) => ['places', 'detail', id] as const,
   placesInBox: (box: BBox, categories: string) => ['places', 'box', box, categories] as const,
   reverse: (at: LngLat) => ['places', 'reverse', at] as const,
+  demoStatus: ['demo', 'status'] as const,
+  demoIncidents: ['demo', 'incidents'] as const,
 }
 
 export function useAppConfig() {
@@ -272,7 +276,8 @@ export function useLiveLocation(optedIn: boolean): boolean {
   const { status } = useSession()
   const { liveLocation } = useCapabilities()
   const visible = useSyncExternalStore(subscribeVisibility, pageVisible, () => false)
-  const active = status === 'signedIn' && optedIn && liveLocation && visible && typeof navigator !== 'undefined' && 'geolocation' in navigator
+  // Demo mode fakes "your location"; never share the real device position while recording.
+  const active = !demoMode && status === 'signedIn' && optedIn && liveLocation && visible && typeof navigator !== 'undefined' && 'geolocation' in navigator
 
   useEffect(() => {
     if (!active) return
@@ -303,4 +308,54 @@ export function useLiveLocation(optedIn: boolean): boolean {
   }, [active, client])
 
   return active
+}
+
+// ── Demo mode: simulated crimes (src/lib/demoMode.ts, backend /api/v1/demo/*) ─────────────────
+
+/** Whether the backend serves simulated crimes. Asked only in demo mode; an older backend (404) reads as off. */
+export function useDemoStatus() {
+  return useQuery({
+    queryKey: queryKeys.demoStatus,
+    queryFn: ({ signal }) => fetchDemoStatus(signal),
+    enabled: demoMode !== null,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+/** Active simulated crimes, polled while demo mode is on and the backend serves them. */
+export function useDemoIncidents() {
+  const served = useDemoStatus().data?.enabled === true
+  return useQuery({
+    queryKey: queryKeys.demoIncidents,
+    queryFn: ({ signal }) => fetchDemoIncidents(signal),
+    enabled: demoMode !== null && served,
+    refetchInterval: 3_000,
+    retry: false,
+  })
+}
+
+/** Simulate a crime. Cached routes are marked stale, so the next plan avoids it. */
+export function useSimulateIncident() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ at, category }: { at: LngLat; category?: string }) => simulateIncident(at, category),
+    onSuccess: (incident) => {
+      client.setQueryData<SimulatedIncident[]>(queryKeys.demoIncidents, (prev) => [incident, ...(prev ?? []).filter((i) => i.id !== incident.id)])
+      // Stale, not refetched: during a walk the route being followed must stay put until the reroute lands.
+      // When not walking, the caller refetches (src/app/useDemoIncidentWatcher.ts).
+      void client.invalidateQueries({ queryKey: ['routes'], refetchType: 'none' })
+    },
+  })
+}
+
+export function useClearIncidents() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: clearIncidents,
+    onSuccess: () => {
+      client.setQueryData<SimulatedIncident[]>(queryKeys.demoIncidents, [])
+      void client.invalidateQueries({ queryKey: ['routes'], refetchType: 'none' })
+    },
+  })
 }

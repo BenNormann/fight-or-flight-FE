@@ -8,7 +8,7 @@ import { animate, motion, useReducedMotion } from 'motion/react'
 import { Protocol } from 'pmtiles'
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { useAppConfig } from '@/api/queries'
+import { useAppConfig, useDemoIncidents, useDemoStatus } from '@/api/queries'
 // DEMO: sample places, routes and heat at real coordinates. Replace with adapters when the backend serves them.
 import { CAMPUS_CENTER, ORIGIN, buildings, demoLayerDefaults, SAFETY_HEAT_LAYER } from '@/demo'
 import { demoRiskCells } from '@/demo/heat'
@@ -39,6 +39,7 @@ import {
 } from './camera'
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { followTraveller as resumeFollow, publishBearing, publishCentredOnUser, registerMapController } from './controller'
+import { DEMO_INCIDENT_RED, DEMO_INCIDENT_SOURCE, demoIncidentFeatures } from './demoIncidents'
 import { floorHopFeatures } from './floorHop'
 import { PHONE_POINTS, phonePoleFeatures } from './phonePoles'
 import { CAMPUS_AREA, zoneAreas, zoneOutlines } from './zones'
@@ -365,6 +366,14 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     const show = phonesOn && mapMode !== '2d'
     setData(map, 'fof-phone-poles', show ? phonePoleFeatures({ post: cssVar('--muted-foreground'), box: PHONE_BOX_BLUE, lamp: PHONE_BLUE }) : EMPTY)
   }, [ready, map, styleGen, phonesOn, mapMode, theme])
+
+  // Demo mode: simulated crimes and the area routes avoid around each (only polled with ?demo).
+  const demoIncidents = useDemoIncidents().data
+  const avoidRadiusM = useDemoStatus().data?.avoidRadiusM ?? 120
+  useEffect(() => {
+    if (!ready || swapping.current || !map.getSource(DEMO_INCIDENT_SOURCE)) return
+    setData(map, DEMO_INCIDENT_SOURCE, demoIncidents?.length ? demoIncidentFeatures(demoIncidents, avoidRadiusM) : EMPTY)
+  }, [ready, map, styleGen, demoIncidents, avoidRadiusM])
 
   // Which area to label follows the camera, once it rests.
   useEffect(() => {
@@ -789,6 +798,38 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
         'circle-radius': ['interpolate', ['linear'], ['zoom'], PHONES_MIN_ZOOM, 2.5, 18, 6],
         'circle-blur': 0.7,
         'circle-opacity': 0.5,
+        'circle-pitch-alignment': 'map',
+      },
+    })
+  // Demo mode: simulated crimes. A faint disc for the avoided area, and a pin on top.
+  if (!map.getSource(DEMO_INCIDENT_SOURCE)) map.addSource(DEMO_INCIDENT_SOURCE, { type: 'geojson', data: EMPTY })
+  if (!map.getLayer('fof-demo-zone'))
+    map.addLayer({
+      id: 'fof-demo-zone',
+      type: 'fill',
+      source: DEMO_INCIDENT_SOURCE,
+      filter: ['==', ['get', 'kind'], 'zone'],
+      paint: { 'fill-color': DEMO_INCIDENT_RED, 'fill-opacity': 0.16 },
+    })
+  if (!map.getLayer('fof-demo-zone-edge'))
+    map.addLayer({
+      id: 'fof-demo-zone-edge',
+      type: 'line',
+      source: DEMO_INCIDENT_SOURCE,
+      filter: ['==', ['get', 'kind'], 'zone'],
+      paint: { 'line-color': DEMO_INCIDENT_RED, 'line-width': 1.5, 'line-dasharray': [2, 2], 'line-opacity': 0.8 },
+    })
+  if (!map.getLayer('fof-demo-pin'))
+    map.addLayer({
+      id: 'fof-demo-pin',
+      type: 'circle',
+      source: DEMO_INCIDENT_SOURCE,
+      filter: ['==', ['get', 'kind'], 'pin'],
+      paint: {
+        'circle-color': DEMO_INCIDENT_RED,
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], 13, 5, 18, 10],
+        'circle-stroke-color': '#ffffff',
+        'circle-stroke-width': 2,
         'circle-pitch-alignment': 'map',
       },
     })

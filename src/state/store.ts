@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { Id, IsoTime, MapMode, NavCharacterId, NavProgress, RouteKind, Selection, SheetSnap } from '@/domain'
 
 /** Which view the sheet (mobile) or side panel (desktop) shows. One feature folder each. */
-export type PanelView = 'explore' | 'search' | 'place' | 'directions' | 'navigation' | 'events' | 'layers' | 'safety'
+export type PanelView = 'explore' | 'search' | 'place' | 'directions' | 'navigation' | 'events' | 'layers' | 'safety' | 'demo'
 export type TravelMode = 'walk' | 'bike' | 'ride'
 /** One end of a trip. */
 export type TripEnd = 'origin' | 'destination'
