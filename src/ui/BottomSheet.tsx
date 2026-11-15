@@ -1,39 +1,18 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
+import { animate, motion, useMotionValue, useReducedMotion, useTransform } from 'motion/react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import type { SheetSnap } from '@/domain'
 import { cn } from '@/lib/cn'
-import { Drawer, DrawerContent, DrawerDescription, DrawerTitle } from '@/ui/vendor/drawer'
 import { SHEET_PEEK_PX } from './layout'
+import { dragOwner, releaseSnap, rubberBand, snapOffsets, type DragOwner, type SnapOffsets } from './sheetDrag'
 
-const HALF = 0.5
-const FULL = 1
-/** Grabber row height; the body gets the rest of the visible sheet. */
-const GRABBER_PX = 24
+/** The drag header: full width, one tap target tall. */
+const HEADER_PX = 44
+/** Movement before a touch is read as a drag (and stops being a tap). */
+const SLOP_PX = 6
+const EASE_SETTLE = [0.22, 1, 0.36, 1] as const
+const NEXT: Record<SheetSnap, SheetSnap> = { peek: 'half', half: 'full', full: 'peek' }
 
-/** Visible sheet height per snap. Vaul translates the full-height sheet, so the body must not extend past it. */
-const visibleHeight: Record<SheetSnap, string> = {
-  peek: `calc(${SHEET_PEEK_PX}px + var(--safe-bottom))`,
-  half: `${HALF * 100}dvh`,
-  full: '100dvh',
-}
-
-/** True while `el`'s content is taller than its box. */
-function useOverflows(snap: SheetSnap) {
-  const ref = useRef<HTMLDivElement | null>(null)
-  const [overflows, setOverflows] = useState(false)
-  useLayoutEffect(() => {
-    const el = ref.current
-    if (!el || typeof ResizeObserver === 'undefined') return
-    const check = () => setOverflows(el.scrollHeight > el.clientHeight + 1)
-    const ro = new ResizeObserver(check)
-    ro.observe(el)
-    if (el.firstElementChild) ro.observe(el.firstElementChild)
-    check()
-    return () => ro.disconnect()
-  }, [snap])
-  return [ref, overflows] as const
-}
-
-/** Reads `env(safe-area-inset-bottom)` in px (vaul snap points need numbers or px strings). */
+/** Reads `env(safe-area-inset-bottom)` in px. */
 function useSafeBottom() {
   const [px, setPx] = useState(0)
   useLayoutEffect(() => {
@@ -51,114 +30,246 @@ function useSafeBottom() {
   return px
 }
 
+/** The sheet's own height (100dvh), tracked as the browser chrome and rotation change it. */
+function useHeight(ref: React.RefObject<HTMLElement | null>) {
+  const [h, setH] = useState(() => (typeof window === 'undefined' ? 800 : window.innerHeight))
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const read = () => setH(el.clientHeight || window.innerHeight)
+    read()
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver(read)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [ref])
+  return h
+}
+
 export interface BottomSheetProps {
   snap: SheetSnap
   onSnapChange: (snap: SheetSnap) => void
   /** Accessible name for the sheet. The view inside renders its own visible heading. */
   title: string
-  description?: string
   children?: ReactNode
   /** Tablet: a floating card on the left instead of edge to edge. */
   floating?: boolean
 }
 
-/**
- * The one non-modal sheet over the map (mobile and tablet): peek / half / full.
- * The map stays interactive behind it. Vaul owns drag physics; the store owns the snap.
- * Loaded lazily so desktop never downloads vaul.
- */
-/**
- * vaul 1.1 never passes `modal` to the Radix Dialog it renders, so even with
- * `modal={false}` Radix's FocusScope traps focus: once anything in the sheet
- * has had focus, focusing the search pill (or any chrome) is bounced back into
- * the sheet and typing goes nowhere. FocusScope listens on `document`; stop
- * focus events that concern elements outside the sheet at `body`, after React
- * (root and portal listeners) has already handled them.
- */
-function useReleaseFocusTrap() {
-  useEffect(() => {
-    const outside = (n: EventTarget | null) => {
-      const sheet = document.querySelector('[data-testid="bottom-sheet"]')
-      return !!sheet && n instanceof Node && !sheet.contains(n)
-    }
-    const onIn = (e: FocusEvent) => {
-      if (outside(e.target)) e.stopPropagation()
-    }
-    const onOut = (e: FocusEvent) => {
-      if (e.relatedTarget && outside(e.relatedTarget)) e.stopPropagation()
-    }
-    document.body.addEventListener('focusin', onIn)
-    document.body.addEventListener('focusout', onOut)
-    return () => {
-      document.body.removeEventListener('focusin', onIn)
-      document.body.removeEventListener('focusout', onOut)
-    }
-  }, [])
+interface Gesture {
+  x0: number
+  y0: number
+  sheetY0: number
+  onHeader: boolean
+  owner: DragOwner | null
+  samples: { t: number; y: number }[]
 }
 
-export default function BottomSheet({ snap, onSnapChange, title, description, children, floating }: BottomSheetProps) {
-  useReleaseFocusTrap()
+/**
+ * The one non-modal sheet over the map (phones and tablets): peek / half / full.
+ * The map stays interactive around it. Google Maps drag rules (see `dragOwner`):
+ * at peek and half a drag anywhere moves the sheet and the content does not
+ * scroll; at full the content scrolls and a downward drag from its top lowers
+ * the sheet. The visible body is always sized to the visible part of the sheet,
+ * so a view's sticky footer (e.g. directions Start) sits on screen at every snap.
+ */
+export default function BottomSheet({ snap, onSnapChange, title, children, floating }: BottomSheetProps) {
+  const reduce = useReducedMotion() ?? false
+  const sheetRef = useRef<HTMLElement | null>(null)
+  const bodyRef = useRef<HTMLDivElement | null>(null)
+  const height = useHeight(sheetRef)
   const safeBottom = useSafeBottom()
-  const peek = `${SHEET_PEEK_PX + safeBottom}px`
-  const points: (string | number)[] = [peek, HALF, FULL]
-  const active = snap === 'peek' ? peek : snap === 'half' ? HALF : FULL
-  const [bodyRef, overflows] = useOverflows(snap)
+  const offsets = snapOffsets(height, SHEET_PEEK_PX + safeBottom)
+  const y = useMotionValue(offsets[snap])
+  const bodyHeight = useTransform(y, (v) => Math.max(0, height - v - HEADER_PX))
+
+  // Latest values for the native listeners, which are installed once.
+  const live = useRef({ snap, offsets, onSnapChange, reduce })
+  useEffect(() => {
+    live.current = { snap, offsets, onSnapChange, reduce }
+  })
+
+  const settle = useCallback(
+    (to: SheetSnap, o: SnapOffsets = live.current.offsets) => {
+      animate(y, o[to], live.current.reduce ? { duration: 0 } : { duration: 0.5, ease: EASE_SETTLE })
+    },
+    [y],
+  )
+
+  // Snap from the store (a selection, a view change) or a new size: move there.
+  const placed = useRef(false)
+  useLayoutEffect(() => {
+    if (!placed.current) {
+      placed.current = true
+      y.set(offsets[snap])
+      return
+    }
+    settle(snap, offsets)
+  }, [snap, offsets.half, offsets.peek, settle, y]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Leaving full: start the next visit to full at the top.
+  useEffect(() => {
+    if (snap !== 'full' && bodyRef.current) bodyRef.current.scrollTop = 0
+  }, [snap])
+
+  const release = useCallback(
+    (g: Gesture) => {
+      const s = g.samples
+      const a = s[0]
+      const b = s[s.length - 1]
+      // A finger that stopped before lifting is not a flick.
+      const fresh = !!b && performance.now() - b.t < 80
+      const velocity = fresh && a && b && b.t > a.t ? ((b.y - a.y) / (b.t - a.t)) * 1000 : 0
+      const { snap: from, offsets: o, onSnapChange: change } = live.current
+      const to = releaseSnap(from, y.get(), velocity, o)
+      if (to === from) settle(to)
+      else change(to)
+    },
+    [settle, y],
+  )
+
+  const move = useCallback(
+    (g: Gesture, clientY: number) => {
+      const next = rubberBand(g.sheetY0 + (clientY - g.y0), live.current.offsets)
+      y.set(next)
+      const t = performance.now()
+      g.samples.push({ t, y: next })
+      while (g.samples.length > 2 && t - (g.samples[0]?.t ?? t) > 100) g.samples.shift()
+    },
+    [y],
+  )
+
+  // Touch: native listeners so a move can be cancelled before the browser scrolls.
+  useEffect(() => {
+    const el = sheetRef.current
+    if (!el) return
+    let g: Gesture | null = null
+    const onStart = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!t || e.touches.length !== 1) {
+        g = null
+        return
+      }
+      y.stop()
+      g = {
+        x0: t.clientX,
+        y0: t.clientY,
+        sheetY0: y.get(),
+        onHeader: !!(e.target instanceof Element && e.target.closest('[data-sheet-header]')),
+        owner: null,
+        samples: [],
+      }
+    }
+    const onMove = (e: TouchEvent) => {
+      const t = e.touches[0]
+      if (!g || !t) return
+      const dx = t.clientX - g.x0
+      const dy = t.clientY - g.y0
+      if (g.owner === null) {
+        const body = bodyRef.current
+        const scrollTop = body?.scrollTop ?? 0
+        const atFull = live.current.snap === 'full' && !g.onHeader
+        // At full the browser scrolls from the first move, so decide on it; elsewhere wait out the slop.
+        if (!atFull && Math.hypot(dx, dy) < SLOP_PX) return
+        if (atFull && dx === 0 && dy === 0) return
+        g.owner = dragOwner({ snap: live.current.snap, onHeader: g.onHeader, scrollTop, dx, dy })
+        if (g.owner === 'sheet') {
+          // Start from the finger's current spot so the sheet does not jump by the slop.
+          g.y0 = t.clientY
+          g.sheetY0 = y.get()
+        }
+      }
+      if (g.owner !== 'sheet') return
+      if (e.cancelable) e.preventDefault()
+      move(g, t.clientY)
+    }
+    const onEnd = (e: TouchEvent) => {
+      if (!g) return
+      const done = g
+      g = null
+      if (done.owner !== 'sheet') return
+      // A drag is not a tap: no click on whatever the finger lifted over.
+      if (e.cancelable) e.preventDefault()
+      release(done)
+    }
+    const opts = { passive: false } as const
+    el.addEventListener('touchstart', onStart, opts)
+    el.addEventListener('touchmove', onMove, opts)
+    el.addEventListener('touchend', onEnd, opts)
+    el.addEventListener('touchcancel', onEnd, opts)
+    return () => {
+      el.removeEventListener('touchstart', onStart)
+      el.removeEventListener('touchmove', onMove)
+      el.removeEventListener('touchend', onEnd)
+      el.removeEventListener('touchcancel', onEnd)
+    }
+  }, [move, release, y])
+
+  // Mouse and pen: drag by the header (a tap on it steps through the snaps).
+  const mouse = useRef<Gesture | null>(null)
+  const dragged = useRef(false)
+  const header = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (e.pointerType === 'touch' || e.button !== 0) return
+      e.currentTarget.setPointerCapture(e.pointerId)
+      y.stop()
+      dragged.current = false
+      mouse.current = { x0: e.clientX, y0: e.clientY, sheetY0: y.get(), onHeader: true, owner: null, samples: [] }
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      const g = mouse.current
+      if (!g) return
+      if (!dragged.current && Math.abs(e.clientY - g.y0) < SLOP_PX) return
+      dragged.current = true
+      move(g, e.clientY)
+    },
+    onPointerUp: () => {
+      const g = mouse.current
+      mouse.current = null
+      if (g && dragged.current) release(g)
+    },
+    onClick: () => {
+      if (dragged.current) {
+        dragged.current = false
+        return
+      }
+      onSnapChange(NEXT[snap])
+    },
+  }
 
   return (
-    <Drawer
-      open
-      modal={false}
-      dismissible={false}
-      snapPoints={points}
-      activeSnapPoint={active}
-      setActiveSnapPoint={(p) => onSnapChange(p === FULL ? 'full' : p === HALF ? 'half' : 'peek')}
+    <motion.section
+      ref={sheetRef}
+      aria-label={title}
+      data-testid="bottom-sheet"
+      data-snap={snap}
+      style={{ y }}
+      className={cn(
+        'fixed bottom-0 z-(--z-sheet) flex h-dvh flex-col outline-none',
+        'rounded-t-3xl bg-card text-card-foreground shadow-sheet',
+        // At peek and half vertical drags are ours; sideways ones still scroll chip rows.
+        snap === 'full' ? 'touch-auto' : 'touch-pan-x',
+        floating ? 'left-4 w-100' : 'inset-x-0 w-full',
+      )}
     >
-      <DrawerContent
-        overlay={false}
-        handle={false}
-        data-testid="bottom-sheet"
-        data-snap={snap}
-        aria-describedby={undefined}
-        className={cn(
-          'z-(--z-sheet) h-full w-full outline-none',
-          // Vaul animates snaps with an inline transition; reduced motion jumps instead.
-          'motion-reduce:transition-none!',
-          'data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-full',
-          // shadow-sheet carries its own 1px casing: no border on top of it (docs/DESIGN.md §3 elevation).
-          'data-[vaul-drawer-direction=bottom]:rounded-t-3xl',
-          'bg-card text-card-foreground shadow-sheet',
-          floating ? 'data-[vaul-drawer-direction=bottom]:left-4 data-[vaul-drawer-direction=bottom]:right-auto md:w-100' : 'mx-auto',
-        )}
+      <button
+        type="button"
+        data-sheet-header=""
+        aria-label={snap === 'full' ? 'Collapse sheet' : 'Expand sheet'}
+        className="flex h-11 w-full shrink-0 cursor-grab touch-none justify-center rounded-t-3xl pt-2 outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:cursor-grabbing"
+        {...header}
       >
-        <DrawerTitle className="sr-only">{title}</DrawerTitle>
-        {description ? <DrawerDescription className="sr-only">{description}</DrawerDescription> : null}
-        <button
-          type="button"
-          aria-label={snap === 'full' ? 'Collapse sheet' : 'Expand sheet'}
-          onClick={() => onSnapChange(snap === 'peek' ? 'half' : snap === 'half' ? 'full' : 'peek')}
-          className={cn(
-            'relative mx-auto flex h-6 w-24 shrink-0 cursor-grab items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            // 44px hit area without changing the 24px row (the lower half is the 8px gap to the header).
-            'after:absolute after:inset-x-0 after:-inset-y-2.5',
-          )}
-        >
-          {/* Grabber 4×32 in muted-foreground. */}
-          <span aria-hidden className="h-1 w-8 rounded-full bg-muted-foreground" />
-        </button>
-        {/*
-          Scrolls at every snap, limited to the visible part of the sheet. At half, a
-          body with hidden content opts out of vaul's drag so touch scrolls it; the
-          grabber still drags. At peek, or when it fits, the body keeps drag-to-expand.
-        */}
-        <div
-          ref={bodyRef}
-          data-vaul-no-drag={snap === 'half' && overflows ? '' : undefined}
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-gutter"
-          style={{ maxHeight: `calc(${visibleHeight[snap]} - ${GRABBER_PX}px)` }}
-        >
-          <div style={{ paddingBottom: 'calc(var(--safe-bottom) + 32px)' }}>{children}</div>
-        </div>
-      </DrawerContent>
-    </Drawer>
+        {/* Grabber 4×32 in muted-foreground. */}
+        <span aria-hidden className="h-1 w-8 rounded-full bg-muted-foreground" />
+      </button>
+      <motion.div
+        ref={bodyRef}
+        data-testid="bottom-sheet-body"
+        className={cn('min-h-0 px-gutter', snap === 'full' ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden')}
+        style={{ height: bodyHeight }}
+      >
+        <div style={{ paddingBottom: 'calc(var(--safe-bottom) + 32px)' }}>{children}</div>
+      </motion.div>
+    </motion.section>
   )
 }

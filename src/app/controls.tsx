@@ -7,7 +7,22 @@ import { useAppStore } from '@/state/store'
 import { Chip, ChipRow, IconButton, Keystone, SearchBar, CategoryIcon } from '@/ui'
 
 /** Search pill bound to the store. Typing searches live; the results view's own header has the back arrow. */
-export function MapSearch({ overMap = true, trailing }: { overMap?: boolean; trailing?: React.ReactNode }) {
+export function MapSearch({
+  overMap = true,
+  trailing,
+  leading,
+  onFocus,
+  onEscape,
+  onSubmitted,
+}: {
+  overMap?: boolean
+  trailing?: React.ReactNode
+  leading?: React.ReactNode
+  onFocus?: () => void
+  onEscape?: () => void
+  /** After Enter: e.g. leave the phone's search surface to show results on the map. */
+  onSubmitted?: () => void
+}) {
   const query = useAppStore((s) => s.query)
   const category = useAppStore((s) => s.category)
   const search = useAppStore((s) => s.search)
@@ -17,8 +32,14 @@ export function MapSearch({ overMap = true, trailing }: { overMap?: boolean; tra
       value={query}
       overMap={overMap}
       onValueChange={(q) => search(q, q ? null : category)}
-      onSubmit={(q) => search(q, category)}
+      onSubmit={(q) => {
+        search(q, category)
+        onSubmitted?.()
+      }}
+      leading={leading}
       trailing={trailing}
+      onFocus={onFocus}
+      onEscape={onEscape}
     />
   )
 }

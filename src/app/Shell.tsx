@@ -1,4 +1,4 @@
-import { Component, Suspense, lazy, type CSSProperties, type ReactNode } from 'react'
+import { Component, Suspense, lazy, useEffect, type CSSProperties, type ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { useCapabilities } from '@/api/capabilities'
 import { useAppConfig, useLiveLocation } from '@/api/queries'
@@ -29,9 +29,26 @@ class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }
   }
 }
 
+/**
+ * The page itself never pinch-zooms or pans: only the map handles two fingers.
+ * `touch-action` on the shell covers Chromium and Firefox; Safari also zooms
+ * the page from its own gesture events, so cancel those.
+ */
+function useNoPageZoom() {
+  useEffect(() => {
+    const stop = (e: Event) => e.preventDefault()
+    const events = ['gesturestart', 'gesturechange'] as const
+    for (const type of events) document.addEventListener(type, stop, { passive: false })
+    return () => {
+      for (const type of events) document.removeEventListener(type, stop)
+    }
+  }, [])
+}
+
 /** The one screen: full-bleed map, floating chrome, and a sheet (touch) or side panel (desktop). */
 export function Shell() {
   useThemeController()
+  useNoPageZoom()
   useStoreToUrl()
   useLiveLocation(useAppStore((s) => s.liveLocationOptIn))
   useNavigationDriver()
@@ -56,7 +73,7 @@ export function Shell() {
   )
 
   return (
-    <div data-testid="app-shell" data-layout={breakpoint} className="relative isolate h-dvh w-full overflow-hidden bg-background">
+    <div data-testid="app-shell" data-layout={breakpoint} className="relative isolate h-dvh w-full touch-pan-x touch-pan-y overflow-hidden bg-background">
       {/* Chrome first in the DOM so search and the panel come before map pins in tab order; z-index keeps the map underneath. */}
       {signingIn ? null : breakpoint === 'desktop' ? (
         <DesktopLayout footer={status} />

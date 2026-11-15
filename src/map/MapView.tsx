@@ -17,11 +17,23 @@ import { env } from '@/lib/env'
 import { useAppStore } from '@/state/store'
 import { Keystone, PlaceIcon, useBreakpoint, useTheme, useViewportHeight } from '@/ui'
 import { DEV_FALLBACK_STYLE, buildMapStyle, type MapTheme } from './basemap'
-import { backendBuildingsAvailable, backendBuildingsUrl, basemapBuildings, pmtilesBuildings, type BuildingSource } from './buildings'
-import { LOCATE_ZOOM, MAX_PITCH, MAX_ZOOM, MIN_ZOOM, START_ZOOM, bboxOf, boundsAround, cameraPresets } from './camera'
+import { backendBuildingsAvailable, backendBuildingsUrl, basemapBuildings, growWithZoom, pmtilesBuildings, type BuildingSource } from './buildings'
+import {
+  BUILDINGS_EXTRUDE_ZOOM,
+  BUILDINGS_MIN_ZOOM,
+  LOCATE_ZOOM,
+  MAX_PITCH,
+  MAX_ZOOM,
+  MIN_ZOOM,
+  START_ZOOM,
+  bboxOf,
+  boundsAround,
+  cameraPresets,
+} from './camera'
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { publishBearing, registerMapController } from './controller'
 import { chromeInsets } from './insets'
+import { installTouchTilt } from './touchTilt'
 import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, shownRoutes, type PinSpec, type RiskPalette } from './overlays'
 
 /**
@@ -142,6 +154,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       maxBounds: boundsAround(config.center),
       renderWorldCopies: false,
       attributionControl: { compact: true },
+      // Two-finger tilt is ours (touchTilt.ts): MapLibre's gives up on real, imperfect fingers.
+      touchPitch: false,
       fadeDuration: live.current.reduce ? 0 : 300,
     })
     m.on('style.load', () => {
@@ -149,6 +163,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       setStyleGen((g) => g + 1)
     })
     m.on('rotate', () => publishBearing(m.getBearing()))
+    // 3D only: two fingers moving together vertically tilt. 2D and Iso: two fingers zoom.
+    const removeTilt = installTouchTilt(m, () => cameraPresets[useAppStore.getState().mapMode].rotate)
     // Dev only: lets local gesture checks read the camera.
     if (import.meta.env.DEV) (window as unknown as { __fofMap?: MlMap }).__fofMap = m
     setMap(m)
@@ -158,6 +174,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     else setBuildingSrc('basemap')
 
     return () => {
+      removeTilt()
       m.remove()
       setMap(null)
     }
@@ -263,7 +280,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     setData(map, 'fof-places', placeFeatures(selectedId))
     map.setPaintProperty('fof-place-casing', 'line-color', cssVar('--background'))
     map.setPaintProperty('fof-place-ring', 'line-color', cssVar('--selected'))
-    if (map.getLayer('fof-buildings')) map.setPaintProperty('fof-buildings', 'fill-extrusion-color', cssVar('--map-building'))
+    if (map.getLayer('fof-buildings')) {
+      map.setPaintProperty('fof-buildings', 'fill-extrusion-color', cssVar('--map-building'))
+      map.setPaintProperty('fof-buildings-flat', 'fill-color', cssVar('--map-building'))
+    }
   }, [ready, map, styleGen, selectedId, theme])
 
   // ── Camera mode ──────────────────────────────────────────────────────────
@@ -380,30 +400,11 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       const t = traveller.current
       if (t) lockOn(t)
     }
-    // Two-finger tilt and twist must not fight: whichever starts first owns the gesture.
-    const isTouch = (e: { originalEvent?: unknown }) => typeof TouchEvent !== 'undefined' && e.originalEvent instanceof TouchEvent
-    const rotates = () => cameraPresets[live.current.mapMode].rotate
-    const onPitchStart = (e: { originalEvent?: unknown }) => {
-      if (isTouch(e)) map.touchZoomRotate.disableRotation()
-    }
-    const onPitchEnd = () => {
-      if (rotates()) map.touchZoomRotate.enableRotation()
-    }
-    const onRotateStart = (e: { originalEvent?: unknown }) => {
-      if (isTouch(e)) map.touchPitch.disable()
-    }
-    const onRotateEnd = () => {
-      if (rotates()) map.touchPitch.enable()
-    }
     const handlers = [
       ['dragstart', onPan],
       ['rotatestart', onAim],
       ['pitchstart', onAim],
       ['moveend', onMoveEnd],
-      ['pitchstart', onPitchStart],
-      ['pitchend', onPitchEnd],
-      ['rotatestart', onRotateStart],
-      ['rotateend', onRotateEnd],
     ] as const
     for (const [type, fn] of handlers) map.on(type, fn)
     return () => {
@@ -526,16 +527,32 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
 
   if (buildings) {
     if (buildings.add && !map.getSource(buildings.source)) map.addSource(buildings.source, buildings.add)
-    // Our extrusion replaces the basemap's flat building fill.
+    // Our footprints and extrusion replace the basemap's own building fill.
     for (const l of layers) if ('source-layer' in l && l['source-layer'] === 'building' && l.type === 'fill') map.setLayoutProperty(l.id, 'visibility', 'none')
+    const color = cssVar('--map-building')
+    // Flat footprints: all of 2D, and Iso / 3D below the extrusion zoom (applyMode sets the range).
+    add({
+      id: 'fof-buildings-flat',
+      type: 'fill',
+      source: buildings.source,
+      'source-layer': buildings.sourceLayer,
+      minzoom: BUILDINGS_MIN_ZOOM,
+      paint: { 'fill-color': color, 'fill-opacity': 0.92 },
+    })
+    // Extrusion grows from 0 at its min zoom, so the hand-over from the flat layer never pops.
     add({
       id: 'fof-buildings',
       type: 'fill-extrusion',
       source: buildings.source,
       'source-layer': buildings.sourceLayer,
-      minzoom: 13,
-      metadata: { height: buildings.height, base: buildings.base },
-      paint: { 'fill-extrusion-color': cssVar('--map-building'), 'fill-extrusion-opacity': 0.92, 'fill-extrusion-height': 0, 'fill-extrusion-base': 0 },
+      minzoom: BUILDINGS_EXTRUDE_ZOOM,
+      layout: { visibility: 'none' },
+      paint: {
+        'fill-extrusion-color': color,
+        'fill-extrusion-opacity': 0.92,
+        'fill-extrusion-height': growWithZoom(buildings.height),
+        'fill-extrusion-base': growWithZoom(buildings.base),
+      },
     })
   }
 
@@ -663,21 +680,18 @@ function applyMode(map: MlMap, mode: keyof typeof cameraPresets, duration: numbe
   if (rotate) {
     map.dragRotate.enable()
     map.touchZoomRotate.enableRotation()
-    map.touchPitch.enable()
     map.keyboard.enableRotation()
   } else {
     map.dragRotate.disable()
     map.touchZoomRotate.disableRotation()
-    map.touchPitch.disable()
     map.keyboard.disableRotation()
   }
   map.easeTo({ pitch: p.pitch, bearing: rotate ? map.getBearing() || p.bearing : p.bearing, duration })
-  const layer = map.getLayer('fof-buildings')
-  if (!layer) return
-  const meta = layer.metadata as { height: ExpressionSpecification; base: ExpressionSpecification }
+  if (!map.getLayer('fof-buildings')) return
+  // 2D: footprints only, no extrusion layer at all. Iso / 3D: footprints until the extrusion zoom.
   const flat = mode === '2d'
-  map.setPaintProperty('fof-buildings', 'fill-extrusion-height', flat ? 0 : meta.height)
-  map.setPaintProperty('fof-buildings', 'fill-extrusion-base', flat ? 0 : meta.base)
+  map.setLayoutProperty('fof-buildings', 'visibility', flat ? 'none' : 'visible')
+  map.setLayerZoomRange('fof-buildings-flat', BUILDINGS_MIN_ZOOM, flat ? 24 : BUILDINGS_EXTRUDE_ZOOM)
 }
 
 // ── Pins ─────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { MagnifyingGlassIcon } from '@phosphor-icons/react'
-import { Suspense, lazy, type ReactNode } from 'react'
+import { Suspense, lazy, type KeyboardEvent, type ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 
 /** Lazy: the animated field is not needed for first paint; a static pill with the same box stands in. */
@@ -16,10 +16,16 @@ export interface SearchBarProps {
   trailing?: ReactNode
   /** Over the map: float shadow. Inside the desktop panel: border. */
   overMap?: boolean
+  onFocus?: () => void
+  /** Escape in the field (e.g. leave a search surface). */
+  onEscape?: () => void
 }
 
 /** Search pill. 16px input text so iOS never zooms. */
-export function SearchBar({ placeholder, value, onValueChange, onSubmit, leading, trailing, overMap = true }: SearchBarProps) {
+export function SearchBar({ placeholder, value, onValueChange, onSubmit, leading, trailing, overMap = true, onFocus, onEscape }: SearchBarProps) {
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') onEscape?.()
+  }
   const icon = leading ?? <MagnifyingGlassIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
   const fallback = (
     <div
@@ -37,6 +43,8 @@ export function SearchBar({ placeholder, value, onValueChange, onSubmit, leading
         placeholder={placeholder}
         value={value}
         onChange={(e) => onValueChange(e.target.value)}
+        onFocus={onFocus}
+        onKeyDown={onKeyDown}
         className="h-full min-h-12 min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-foreground/70 [&::-webkit-search-cancel-button]:appearance-none"
       />
       {trailing}
@@ -60,6 +68,8 @@ export function SearchBar({ placeholder, value, onValueChange, onSubmit, leading
           leading={icon}
           onChange={(e) => onValueChange(e.target.value)}
           onClear={() => onValueChange('')}
+          onFocus={onFocus}
+          onKeyDown={onKeyDown}
           placeholder={placeholder}
           trailing={trailing}
           value={value}

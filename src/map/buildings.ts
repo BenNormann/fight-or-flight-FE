@@ -5,6 +5,12 @@
  */
 import type { ExpressionSpecification, StyleSpecification } from 'maplibre-gl'
 import { env } from '@/lib/env'
+import { BUILDINGS_EXTRUDE_ZOOM, BUILDINGS_FULL_HEIGHT_ZOOM } from './camera'
+
+/** A height (or base) that is 0 at the extrusion threshold and full by {@link BUILDINGS_FULL_HEIGHT_ZOOM}. */
+export function growWithZoom(height: ExpressionSpecification): ExpressionSpecification {
+  return ['interpolate', ['linear'], ['zoom'], BUILDINGS_EXTRUDE_ZOOM, 0, BUILDINGS_FULL_HEIGHT_ZOOM, height]
+}
 
 export interface BuildingSource {
   /** Source id in the style; added by us for PMTiles, the basemap's own otherwise. */
@@ -19,7 +25,7 @@ export interface BuildingSource {
 export const BACKEND_BUILDINGS_PATH = '/api/v1/buildings.pmtiles'
 
 /** Absolute URL of the backend buildings archive, or null in mock mode / without a backend. */
-export function backendBuildingsUrl(base = env.apiBase, origin = typeof location === 'undefined' ? 'http://localhost' : location.href): string | null {
+export function backendBuildingsUrl(base = env.tilesBase, origin = typeof location === 'undefined' ? 'http://localhost' : location.href): string | null {
   if (env.useMocks || !env.apiUrl) return null
   return new URL(`${base}${BACKEND_BUILDINGS_PATH}`, origin).href
 }

@@ -7,6 +7,9 @@ test('turn by turn: start a route, follow the simulated walk, arrive, end', asyn
   await page.getByTestId('dev-email').fill('trojan.dev@usc.edu')
   await page.getByTestId('dev-sign-in').click()
   await expect(page.getByTestId('view-directions')).toBeVisible()
+  // The sheet opens at half: its body is sized to the visible part, so Start is on screen without scrolling.
+  await expect(page.getByTestId('bottom-sheet')).toHaveAttribute('data-snap', 'half')
+  await expect(page.getByTestId('start-route')).toBeInViewport({ ratio: 1 })
 
   await page.getByTestId('start-route').click()
 
