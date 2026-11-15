@@ -73,8 +73,9 @@ export function HaloSegmented({
   return (
     <div
       className={cn(
-        "relative inline-flex max-w-full rounded-full border border-border p-1 shadow-float",
-        translucent ? "bg-glass backdrop-blur-glass" : "bg-card",
+        /* Shadow or border, never both (docs/DESIGN.md §3 elevation). */
+        "relative inline-flex max-w-full rounded-full bg-card p-1",
+        translucent ? "shadow-float" : "border border-border",
         className
       )}
     >
@@ -99,7 +100,7 @@ export function HaloSegmented({
               "outline-none transition-colors duration-200",
               "focus-visible:outline-2 focus-visible:outline-ring",
               "disabled:pointer-events-none disabled:opacity-50",
-              "aria-pressed:text-primary-foreground"
+              "hover:text-foreground aria-pressed:text-selected-foreground"
             )}
             disabled={item.disabled}
             key={item.value}
@@ -108,7 +109,7 @@ export function HaloSegmented({
             {selected === item.value ? (
               <motion.span
                 aria-hidden
-                className="absolute inset-0 rounded-full bg-primary"
+                className="absolute inset-0 rounded-full bg-selected"
                 layoutId={thumbId}
                 transition={reduceMotion ? { duration: 0 } : layoutSpring}
               />

@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react'
+import { MagnifyingGlassIcon } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { HaloSearchInput } from '@/ui/vendor/halo-search'
 
@@ -41,7 +41,7 @@ export function SearchBar({
         enterKeyHint="search"
         autoComplete="off"
         aria-label={placeholder}
-        leading={leading ?? <Search aria-hidden className="size-5 shrink-0 text-muted-foreground" />}
+        leading={leading ?? <MagnifyingGlassIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />}
         onBlur={() => onFocusChange?.(false)}
         onChange={(e) => onValueChange(e.target.value)}
         onClear={() => onValueChange('')}

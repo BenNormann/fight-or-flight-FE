@@ -1,4 +1,4 @@
-import { Navigation, X } from 'lucide-react'
+import { NavigationArrowIcon, XIcon } from '@phosphor-icons/react'
 import { demoRoutes, placeOf } from '@/demo'
 import { useAppStore } from '@/state/store'
 import { StatusPill, arrivalTime, formatClock, formatDistance, formatDuration } from '@/ui'
@@ -17,7 +17,7 @@ export default function ActiveRoutePill() {
   return (
     <StatusPill
       label="Active route"
-      icon={<Navigation />}
+      icon={<NavigationArrowIcon weight="fill" />}
       summary={
         <>
           <span className="font-mono">{formatDuration(route.durationS)}</span> · {to.name}
@@ -28,7 +28,7 @@ export default function ActiveRoutePill() {
           {route.kind === 'safest' ? 'Safest' : 'Fastest'} route · {formatDistance(route.distanceM)} · arrive{' '}
           {formatClock(arrivalTime(route.durationS, leaveAt))}
           <br />
-          Head north on the west avenue, then turn right at the quad.
+          Head north on Trousdale Parkway, then turn right at Hahn Plaza.
         </>
       }
       action={
@@ -38,7 +38,7 @@ export default function ActiveRoutePill() {
           aria-label="End route"
           className="button-sm inline-flex h-tap items-center gap-1 rounded-full bg-primary-foreground/10 px-3 outline-none hover:bg-primary-foreground/20 focus-visible:ring-2 focus-visible:ring-primary-foreground"
         >
-          <X aria-hidden className="size-4" /> End
+          <XIcon aria-hidden className="size-4" /> End
         </button>
       }
     />

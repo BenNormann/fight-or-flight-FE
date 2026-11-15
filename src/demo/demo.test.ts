@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+﻿import { describe, expect, it } from 'vitest'
 import { buildings, demoRoutes, demoSearch, project, rooms, unproject } from '.'
 
 describe('demo data', () => {
@@ -14,7 +14,7 @@ describe('demo data', () => {
   })
 
   it('search matches names, codes and categories', () => {
-    expect(demoSearch('hol', null).some((r) => r.id === 'b-lib')).toBe(true)
+    expect(demoSearch('dml', null).some((r) => r.id === 'b-lib')).toBe(true)
     expect(demoSearch('maker', null).some((r) => r.kind === 'room')).toBe(true)
     expect(demoSearch('', 'parking').every((r) => r.kind !== 'room')).toBe(true)
     expect(demoSearch('zzz', null)).toEqual([])

@@ -1,10 +1,11 @@
-import { Accessibility, Bookmark, Building2, Navigation, Phone, Share2 } from 'lucide-react'
+import { BookmarkSimpleIcon, BuildingsIcon, MapPinSimpleIcon, NavigationArrowIcon, PhoneIcon, ShareNetworkIcon, WheelchairIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { POI_LABEL, events, findBuilding, findPoi, findRoom, placeMeta, roomsIn } from '@/demo'
 import type { Building, Id, Poi, Room } from '@/domain'
 import { useAppStore } from '@/state/store'
 import {
   ActionBar,
+  Button,
   Card,
   Chip,
   ChipRow,
@@ -34,14 +35,14 @@ function share(title: string) {
 function useCommonActions(id: Id, name: string): ActionItem[] {
   const directionsTo = useAppStore((s) => s.directionsTo)
   return [
-    { id: 'dir', label: 'Directions', icon: <Navigation />, primary: true, onClick: () => directionsTo(id) },
+    { id: 'dir', label: 'Directions', icon: <NavigationArrowIcon weight="fill" />, primary: true, onClick: () => directionsTo(id) },
     {
       id: 'save',
       label: 'Save',
-      icon: <Bookmark />,
+      icon: <BookmarkSimpleIcon />,
       onClick: () => notify({ id: 'save', title: 'Saving places needs an account', description: 'Sign in arrives with the backend.' }),
     },
-    { id: 'share', label: 'Share', icon: <Share2 />, onClick: () => share(name) },
+    { id: 'share', label: 'Share', icon: <ShareNetworkIcon />, onClick: () => share(name) },
   ]
 }
 
@@ -49,7 +50,8 @@ function Hours({ id }: { id: Id }) {
   const meta = placeMeta[id]
   if (!meta?.hours) return null
   return (
-    <span className={meta.openNow ? 'text-foreground' : 'text-muted-foreground'}>
+    <span className={meta.openNow ? 'inline-flex items-center gap-2 text-foreground' : 'text-muted-foreground'}>
+      {meta.openNow ? <span aria-hidden className="size-2 shrink-0 rounded-full bg-gold" /> : null}
       {meta.openNow ? meta.hours : `Closed now · ${meta.hours}`}
     </span>
   )
@@ -68,7 +70,7 @@ function BuildingDetail({ building }: { building: Building }) {
   return (
     <div data-testid="view-place">
       <ViewHeader
-        eyebrow={`Building · ${building.code}`}
+        eyebrow={<span className="text-brand-ink">Building · <span className="font-mono">{building.code}</span></span>}
         title={building.name}
         subtitle={
           <>
@@ -81,10 +83,10 @@ function BuildingDetail({ building }: { building: Building }) {
       <ActionBar actions={actions} />
       {placeMeta[building.id]?.blurb ? <p className="body-6 mt-4 text-muted-foreground">{placeMeta[building.id]?.blurb}</p> : null}
 
-      <Section className="mt-6" title={`Floors and rooms · ${building.floors ?? floors.length} floors`}>
+      <Section className="mt-6" title={`Rooms · ${building.floors ?? floors.length} floors`}>
         {floors.length ? (
           <>
-            <ChipRow label="Floors" className="-mx-gutter mb-2 px-gutter">
+            <ChipRow label="Floors" className="-mx-gutter -mt-2 px-gutter py-2">
               <Chip pressed={floor === null} onClick={() => setFloor(null)}>
                 All
               </Chip>
@@ -106,18 +108,20 @@ function BuildingDetail({ building }: { building: Building }) {
             ))}
           </>
         ) : (
-          <EmptyState icon={<Building2 />} title="No rooms listed" body="Indoor maps for this building are not available yet." />
+          <EmptyState icon={<BuildingsIcon weight="duotone" />} title="No rooms listed yet" body="Indoor maps for this building arrive with the backend." />
         )}
       </Section>
 
       <Section title="Entrances">
         {building.entrances.map((e) => (
-          <div key={e.id} className="flex min-h-12 items-center gap-3">
-            <PlaceIcon type="entrance" className="size-5 text-muted-foreground" />
-            <span className="body-6 flex-1">{e.name ?? 'Entrance'}</span>
+          <div key={e.id} className="flex min-h-14 items-center gap-3">
+            <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
+              <MapPinSimpleIcon className="size-5" />
+            </span>
+            <span className="title-3 min-w-0 flex-1 truncate">{e.name ?? 'Entrance'}</span>
             {e.accessible ? (
-              <span className="caption-4 inline-flex items-center gap-1 text-muted-foreground">
-                <Accessibility aria-hidden className="size-4" /> Step free
+              <span className="caption-4 inline-flex shrink-0 items-center gap-1 text-muted-foreground">
+                <WheelchairIcon aria-hidden className="size-4" /> Step free
               </span>
             ) : null}
           </div>
@@ -131,7 +135,8 @@ function BuildingDetail({ building }: { building: Building }) {
               key={e.id}
               icon={<PlaceIcon type="event" />}
               title={e.title}
-              subtitle={`${dayLabel(e.start)} · ${formatClock(e.start)}`}
+              subtitle={dayLabel(e.start)}
+              meta={<span className="font-mono">{formatClock(e.start)}</span>}
               onClick={() => select({ kind: 'event', id: e.id })}
             />
           ))}
@@ -148,25 +153,25 @@ function RoomDetail({ room }: { room: Room }) {
   return (
     <div data-testid="view-place">
       <ViewHeader
-        eyebrow={`Room · ${room.floor === 'G' ? 'Ground floor' : `Floor ${room.floor}`}`}
+        eyebrow={<span className="text-brand-ink">Room · {room.floor === 'G' ? 'Ground floor' : `Floor ${room.floor}`}</span>}
         title={room.name}
         subtitle={building ? `In ${building.name}` : undefined}
         onBack={() => (building ? select({ kind: 'building', id: building.id }) : select(null))}
         backLabel={building ? `Back to ${building.name}` : 'Back'}
       />
       <ActionBar actions={actions} />
-      <Card className="mt-4 grid grid-cols-2 gap-4">
+      <Card className="mt-6 grid grid-cols-2 gap-4">
         <div>
           <p className="caption-4 text-muted-foreground">Type</p>
-          <p className="title-3">{room.type ?? 'Room'}</p>
+          <p className="heading-5">{room.type ?? 'Room'}</p>
         </div>
         <div>
           <p className="caption-4 text-muted-foreground">Capacity</p>
-          <p className="title-3 font-mono">{room.capacity ?? 'n/a'}</p>
+          <p className="heading-5 font-mono text-brand-ink">{room.capacity ?? 'n/a'}</p>
         </div>
       </Card>
       {building ? (
-        <Section title="Building">
+        <Section className="mt-6" title="Building">
           <ListRow
             icon={<PlaceIcon type="building" />}
             title={building.name}
@@ -188,7 +193,7 @@ function PoiDetail({ poi }: { poi: Poi }) {
         {
           id: 'call',
           label: 'Call',
-          icon: <Phone />,
+          icon: <PhoneIcon />,
           onClick: () =>
             notify({
               id: 'call',
@@ -202,7 +207,7 @@ function PoiDetail({ poi }: { poi: Poi }) {
     : common
   return (
     <div data-testid="view-place">
-      <ViewHeader eyebrow={POI_LABEL[poi.type] ?? 'Place'} title={poi.name ?? POI_LABEL[poi.type] ?? 'Place'} subtitle={<Hours id={poi.id} />} onBack={back} />
+      <ViewHeader eyebrow={<span className="text-brand-ink">{POI_LABEL[poi.type] ?? 'Place'}</span>} title={poi.name ?? POI_LABEL[poi.type] ?? 'Place'} subtitle={<Hours id={poi.id} />} onBack={back} />
       <ActionBar actions={actions} />
       {poi.type === 'blue_light' ? (
         <p className="body-6 mt-4 text-muted-foreground">Press the button on the pole to talk to campus police. The call box shares its location automatically.</p>
@@ -230,7 +235,7 @@ export default function PlaceView() {
   return (
     <div data-testid="view-place">
       <ViewHeader title="Place not found" onBack={back} />
-      <EmptyState icon={<Building2 />} title="This place is not on the map" body="The link may be out of date. Search for it by name instead." />
+      <EmptyState icon={<BuildingsIcon weight="duotone" />} title="This place is not on the map" body="The link may be out of date. Search for it by name instead." action={<Button onClick={back}>Back to the map</Button>} />
     </div>
   )
 }

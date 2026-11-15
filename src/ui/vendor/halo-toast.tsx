@@ -10,7 +10,7 @@ import type { ComponentProps } from "react"
 import type { ExternalToast } from "sonner"
 import { toast as sonnerToast, Toaster as SonnerToaster } from "sonner"
 import "sonner/dist/styles.css"
-import { XIcon } from "lucide-react"
+import { XIcon } from "@phosphor-icons/react"
 
 import { cn } from "@/lib/cn"
 import { Button } from "@/ui/vendor/button"
@@ -40,7 +40,7 @@ export function PolishedToastSurface({
     <div
       aria-live={politeness === "alert" ? "assertive" : "polite"}
       className={cn(
-        "flex w-full items-start gap-3 rounded-2xl border border-border bg-glass py-3 pr-1 pl-4 text-left shadow-overlay backdrop-blur-glass",
+        "flex w-full items-start gap-3 rounded-2xl bg-card py-3 pr-1 pl-4 text-left text-card-foreground shadow-overlay",
         className
       )}
       role={politeness === "alert" ? "alert" : "status"}

@@ -1,4 +1,13 @@
-import { ArrowUpDown, Bike, Car, CircleDot, Footprints, MapPin, Navigation, TriangleAlert } from 'lucide-react'
+import {
+  ArrowsDownUpIcon,
+  BicycleIcon,
+  CarIcon,
+  CheckCircleIcon,
+  MapPinIcon,
+  NavigationArrowIcon,
+  PersonSimpleWalkIcon,
+  WarningIcon,
+} from '@phosphor-icons/react'
 import { useState } from 'react'
 import { useCapability } from '@/api/capabilities'
 import { buildings, demoRoutes, placeOf } from '@/demo'
@@ -23,9 +32,9 @@ import {
 } from '@/ui'
 
 const MODES = [
-  { value: 'walk', label: <span className="inline-flex items-center gap-2"><Footprints aria-hidden className="size-4" />Walk</span> },
-  { value: 'bike', label: <span className="inline-flex items-center gap-2"><Bike aria-hidden className="size-4" />Bike</span> },
-  { value: 'ride', label: <span className="inline-flex items-center gap-2"><Car aria-hidden className="size-4" />Ride</span> },
+  { value: 'walk', label: <span className="inline-flex items-center gap-2"><PersonSimpleWalkIcon aria-hidden className="size-4" />Walk</span> },
+  { value: 'bike', label: <span className="inline-flex items-center gap-2"><BicycleIcon aria-hidden className="size-4" />Bike</span> },
+  { value: 'ride', label: <span className="inline-flex items-center gap-2"><CarIcon aria-hidden className="size-4" />Ride</span> },
 ] as const
 
 const LEAVE_OPTIONS = [
@@ -51,24 +60,27 @@ function RouteCard({ route, selected, onSelect, leaveAt }: { route: Route; selec
       onClick={onSelect}
       data-testid={`route-card-${route.kind}`}
       className={cn(
-        'flex w-full flex-col gap-2 rounded-2xl border p-4 text-left transition-[transform,border-color] duration-200 active:scale-[0.98]',
+        'flex w-full flex-col gap-2 rounded-2xl border p-4 text-left transition-[transform,background-color,border-color] duration-200 active:scale-[0.98]',
         'outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        selected ? 'border-primary bg-card ring-1 ring-primary' : 'border-border bg-card hover:border-input',
+        selected ? 'border-selected bg-brand-subtle text-brand-subtle-foreground ring-1 ring-selected' : 'border-border bg-card hover:bg-accent',
       )}
     >
       <span className="flex items-center justify-between gap-2">
-        <span className="title-4">{title}</span>
+        <span className="title-3 inline-flex items-center gap-2">
+          {selected ? <CheckCircleIcon aria-hidden weight="fill" className="size-5 text-brand-ink" /> : null}
+          {title}
+        </span>
         <RiskBadge score={route.risk.mean} />
       </span>
       <span className="flex items-baseline gap-2">
-        <span className="heading-5 font-mono">{formatDuration(route.durationS)}</span>
+        <span className={cn('heading-5 font-mono', selected && 'text-brand-ink')}>{formatDuration(route.durationS)}</span>
         <span className="body-6 text-muted-foreground">
           {formatDistance(route.distanceM)} · arrive {formatClock(arrivalTime(route.durationS, leaveAt))}
         </span>
       </span>
       {route.warnings.map((w) => (
         <span key={w} className="caption-4 flex items-start gap-2 text-muted-foreground">
-          <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0" />
+          <WarningIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
           {w}
         </span>
       ))}
@@ -99,11 +111,13 @@ export default function DirectionsView() {
     <div data-testid="view-directions">
       <ViewHeader title="Directions" onBack={back} />
 
-      <div className="flex items-stretch gap-2 rounded-2xl border border-border p-2">
+      <div className="flex items-stretch gap-2 rounded-2xl border border-border bg-card p-2">
         <div className="flex flex-col items-center justify-center gap-1 px-2 text-muted-foreground" aria-hidden>
-          <CircleDot className="size-4" />
+          <span className="grid size-4 place-items-center">
+            <span className="size-2.5 rounded-full bg-gold ring-2 ring-background" />
+          </span>
           <span className="h-4 w-px bg-border" />
-          <MapPin className="size-4" />
+          <MapPinIcon weight="fill" className="size-4 text-foreground" />
         </div>
         <div className="min-w-0 flex-1">
           <button
@@ -129,7 +143,7 @@ export default function DirectionsView() {
           className="grid w-tap place-items-center rounded-lg text-muted-foreground hover:bg-accent"
           onClick={() => notify({ id: 'swap', title: 'Swapping needs live routing', description: 'Routes back to your location arrive with the backend.' })}
         >
-          <ArrowUpDown aria-hidden className="size-5" />
+          <ArrowsDownUpIcon aria-hidden className="size-5" />
         </button>
       </div>
 
@@ -152,7 +166,7 @@ export default function DirectionsView() {
         </Section>
       ) : (
         <>
-          <Section className="mt-4" title="Routes">
+          <Section className="mt-6" title="Routes">
             {travelMode === 'ride' ? (
               <p className="body-6 mb-2 text-muted-foreground">Ride times include about 4 min of pickup wait. Booking opens your rideshare app.</p>
             ) : null}
@@ -168,7 +182,7 @@ export default function DirectionsView() {
             tone="brand"
             block
             className="mt-4"
-            icon={<Navigation />}
+            icon={<NavigationArrowIcon weight="fill" />}
             data-testid="start-route"
             disabled={!chosen}
             onClick={() => {
@@ -180,7 +194,7 @@ export default function DirectionsView() {
             Start
           </Button>
           <Section className="mt-6" title="Leave">
-            <ChipRow label="Leave time" className="-mx-gutter px-gutter">
+            <ChipRow label="Leave time" className="-mx-gutter -my-2 px-gutter py-2">
               {LEAVE_OPTIONS.map((o) => (
                 <Chip key={o.id} pressed={leaveId === o.id} onClick={() => {
                     setLeaveId(o.id)
@@ -189,11 +203,16 @@ export default function DirectionsView() {
                   {o.label}
                 </Chip>
               ))}
-              <label className="button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full border border-border bg-secondary px-4 focus-within:ring-2 focus-within:ring-ring">
+              <label
+                className={cn(
+                  'button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full px-4 focus-within:ring-2 focus-within:ring-ring',
+                  leaveId === 'custom' ? 'bg-selected text-selected-foreground' : 'bg-secondary text-secondary-foreground',
+                )}
+              >
                 <span className="sr-only">Pick a leave time</span>
                 <input
                   type="time"
-                  className="bg-transparent text-base outline-none"
+                  className="bg-transparent font-mono text-base outline-none"
                   value={leaveAt ? new Date(leaveAt).toTimeString().slice(0, 5) : ''}
                   onChange={(e) => {
                     const [h, m] = e.target.value.split(':').map(Number)

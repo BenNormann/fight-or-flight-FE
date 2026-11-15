@@ -448,10 +448,10 @@ export function HaloSearchInput({
         aria-busy={isLoading || undefined}
         className={cn(
           "relative flex min-h-tap items-center gap-2 rounded-full pr-1 pl-4",
-          "border border-border shadow-float",
-          "transition-[background-color,border-color] duration-200",
-          isFocused && "border-input",
-          showBlobTranslucent ? "bg-glass backdrop-blur-glass" : "bg-card"
+          /* Opaque card. Over the map: shadow-float (has its own casing). In a panel: border. Never both. */
+          "bg-card transition-[box-shadow,border-color] duration-200",
+          showBlobTranslucent ? "shadow-float" : "border border-border",
+          isFocused && (showBlobTranslucent ? "inset-ring inset-ring-input" : "border-input")
         )}
       >
         {leading}

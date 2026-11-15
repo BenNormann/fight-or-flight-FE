@@ -1,8 +1,9 @@
 /**
  * DEMO DATA. DELETE THIS FOLDER when the backend contract is known.
  *
- * A fictional campus ("Northfield University") typed with src/domain so views
- * and the placeholder map can be built before any adapter exists. Nothing here
+ * SAMPLE DATA modelled loosely on USC University Park, typed with src/domain so views
+ * and the placeholder map can be built before any adapter exists. Names, rooms,
+ * hours and events are illustrative, not official USC information. Nothing here
  * is backend data, and nothing here may be imported by src/api.
  *
  * Coordinates: the placeholder map is a 1600×1600 px plane at roughly 1 px per
@@ -22,7 +23,7 @@ import type {
 } from '@/domain'
 
 export const PLANE = 1600
-const CENTER: LngLat = [-93.2275, 44.9735]
+const CENTER: LngLat = [-118.2851, 34.0224]
 const M_PER_DEG_LAT = 111_320
 const M_PER_DEG_LNG = M_PER_DEG_LAT * Math.cos((CENTER[1] * Math.PI) / 180)
 
@@ -48,13 +49,13 @@ interface BuildingSpec {
 }
 
 const buildingSpecs: BuildingSpec[] = [
-  { id: 'b-lib', code: 'HOL', name: 'Hollis Library', rect: [632, 432, 124, 92], floors: 5, address: '210 Pleasant St' },
-  { id: 'b-sci', code: 'CAR', name: 'Carver Science Hall', rect: [792, 428, 172, 84], floors: 4, address: '116 Church St' },
-  { id: 'b-uni', code: 'MAR', name: 'Marlow Student Union', rect: [648, 576, 148, 104], floors: 3, address: '300 Washington Ave' },
-  { id: 'b-eng', code: 'ATW', name: 'Atwater Engineering', rect: [840, 560, 124, 128], floors: 6, address: '200 Union St' },
-  { id: 'b-art', code: 'PEL', name: 'Pell Arts Center', rect: [632, 736, 116, 92], floors: 2, address: '405 21st Ave' },
-  { id: 'b-rec', code: 'RDG', name: 'Ridgeway Rec Center', rect: [800, 740, 164, 112], floors: 2, address: '1906 University Ave' },
-  { id: 'b-gar', code: 'GRE', name: 'East Garage', rect: [672, 868, 152, 52], floors: 4, address: '515 Delaware St' },
+  { id: 'b-lib', code: 'DML', name: 'Doheny Memorial Library', rect: [632, 432, 124, 92], floors: 5, address: '3550 Trousdale Pkwy' },
+  { id: 'b-sci', code: 'SGM', name: 'Seeley G. Mudd Building', rect: [792, 428, 172, 84], floors: 4, address: '3620 McClintock Ave' },
+  { id: 'b-uni', code: 'TCC', name: 'Ronald Tutor Campus Center', rect: [648, 576, 148, 104], floors: 3, address: '3607 Trousdale Pkwy' },
+  { id: 'b-eng', code: 'RTH', name: 'Ronald Tutor Hall', rect: [840, 560, 124, 128], floors: 6, address: '3710 McClintock Ave' },
+  { id: 'b-art', code: 'DRC', name: 'Drama Center', rect: [632, 736, 116, 92], floors: 2, address: '1029 Childs Way' },
+  { id: 'b-rec', code: 'LRC', name: 'Lyon Recreation Center', rect: [800, 740, 164, 112], floors: 2, address: '1026 W 34th St' },
+  { id: 'b-gar', code: 'PSX', name: 'Royal Street Parking', rect: [672, 868, 152, 52], floors: 4, address: '3335 S Figueroa St' },
 ]
 
 function rectPolygon([x, y, w, h]: BuildingSpec['rect']) {
@@ -83,22 +84,22 @@ export const buildings: Building[] = buildingSpecs.map((b) => {
 // ── Rooms ────────────────────────────────────────────────────────────────────
 
 const roomRows: [Id, string, string, string, number?][] = [
-  ['b-lib', 'Quiet reading room', 'G', 'Study', 64],
+  ['b-lib', 'Grand reading room', 'G', 'Study', 64],
   ['b-lib', 'Group study 2A', '2', 'Study', 8],
   ['b-lib', 'Group study 2B', '2', 'Study', 6],
   ['b-lib', 'Map and data lab', '3', 'Lab', 24],
   ['b-lib', 'Archives reading room', '4', 'Study', 18],
-  ['b-lib', 'Bean and Ledger Cafe', 'G', 'Food'],
+  ['b-lib', 'Literatea Cafe', 'G', 'Food'],
   ['b-sci', 'Lecture hall 110', '1', 'Lecture', 212],
   ['b-sci', 'Chemistry lab 214', '2', 'Lab', 36],
   ['b-sci', 'Seminar room 305', '3', 'Seminar', 22],
-  ['b-uni', 'Union food court', '1', 'Food'],
-  ['b-uni', 'Ballroom', '3', 'Event space', 420],
+  ['b-uni', 'Campus Center food court', '1', 'Food'],
+  ['b-uni', 'Trojan Grand Ballroom', '3', 'Event space', 420],
   ['b-uni', 'Student services desk', '1', 'Service'],
   ['b-eng', 'Maker space', 'B1', 'Lab', 40],
-  ['b-eng', 'Lecture hall 120', '1', 'Lecture', 160],
+  ['b-eng', 'Lecture hall 101', '1', 'Lecture', 160],
   ['b-eng', 'Design studio 410', '4', 'Studio', 48],
-  ['b-art', 'Black box theater', '1', 'Event space', 120],
+  ['b-art', 'Scene Dock Theatre', '1', 'Event space', 120],
   ['b-rec', 'Climbing wall', '1', 'Recreation'],
 ]
 
@@ -121,16 +122,16 @@ const poiAt = (id: Id, type: Poi['type'], x: number, y: number, name?: string): 
 })
 
 export const pois: Poi[] = [
-  poiAt('p-bl-1', 'blue_light', 776, 548, 'Blue light, Union lawn'),
-  poiAt('p-bl-2', 'blue_light', 620, 712, 'Blue light, Pell walk'),
-  poiAt('p-bl-3', 'blue_light', 980, 720, 'Blue light, Church St'),
-  poiAt('p-bl-4', 'blue_light', 840, 896, 'Blue light, East Garage'),
-  poiAt('p-dps', 'dps', 980, 470, 'Campus police, Church St station'),
-  poiAt('p-cafe-1', 'cafe', 700, 520, 'Bean and Ledger Cafe'),
-  poiAt('p-cafe-2', 'cafe', 1060, 640, 'Sato Noodle Bar'),
-  poiAt('p-park-1', 'parking', 748, 894, 'East Garage, level 1 to 4'),
-  poiAt('p-park-2', 'parking', 560, 820, 'Lot C, surface'),
-  poiAt('p-bike-1', 'bike_rack', 816, 704, 'Bike racks, Atwater'),
+  poiAt('p-bl-1', 'blue_light', 776, 548, 'Blue light, Trousdale Pkwy'),
+  poiAt('p-bl-2', 'blue_light', 620, 712, 'Blue light, Childs Way'),
+  poiAt('p-bl-3', 'blue_light', 980, 720, 'Blue light, McClintock Ave'),
+  poiAt('p-bl-4', 'blue_light', 840, 896, 'Blue light, Royal St garage'),
+  poiAt('p-dps', 'dps', 980, 470, 'USC DPS, McClintock Ave station'),
+  poiAt('p-cafe-1', 'cafe', 700, 520, 'Literatea Cafe'),
+  poiAt('p-cafe-2', 'cafe', 1060, 640, 'Figueroa Noodle Bar'),
+  poiAt('p-park-1', 'parking', 748, 894, 'Royal St garage, levels 1 to 4'),
+  poiAt('p-park-2', 'parking', 560, 820, 'Lot 6, surface'),
+  poiAt('p-bike-1', 'bike_rack', 816, 704, 'Bike racks, Tutor Hall'),
 ]
 
 // ── Categories and place details ─────────────────────────────────────────────
@@ -153,11 +154,11 @@ export interface PlaceMeta {
 }
 
 export const placeMeta: Record<Id, PlaceMeta> = {
-  'b-lib': { categories: ['buildings', 'study'], hours: 'Open until 2:00', openNow: true, blurb: 'Five floors of study space, a cafe on the ground floor and the map and data lab.' },
-  'b-sci': { categories: ['buildings', 'study'], hours: 'Open until 22:00', openNow: true, blurb: 'Teaching labs and the largest lecture hall on the east side.' },
-  'b-uni': { categories: ['buildings', 'food'], hours: 'Open until 23:30', openNow: true, blurb: 'Food court, student services and the ballroom.' },
+  'b-lib': { categories: ['buildings', 'study'], hours: 'Open until 2:00', openNow: true, blurb: 'Grand reading room, quiet stacks upstairs and a cafe off the main hall.' },
+  'b-sci': { categories: ['buildings', 'study'], hours: 'Open until 22:00', openNow: true, blurb: 'Teaching labs and a large lecture hall on McClintock.' },
+  'b-uni': { categories: ['buildings', 'food'], hours: 'Open until 23:30', openNow: true, blurb: 'Food court, student services and the Trojan Grand Ballroom.' },
   'b-eng': { categories: ['buildings', 'study'], hours: 'Card access after 19:00', openNow: true, blurb: 'Maker space in the basement, design studios upstairs.' },
-  'b-art': { categories: ['buildings'], hours: 'Open until 21:00', openNow: true, blurb: 'Galleries and the black box theater.' },
+  'b-art': { categories: ['buildings'], hours: 'Open until 21:00', openNow: true, blurb: 'Rehearsal rooms and the Scene Dock Theatre.' },
   'b-rec': { categories: ['buildings'], hours: 'Open until 23:00', openNow: true, blurb: 'Pool, courts and the climbing wall.' },
   'b-gar': { categories: ['buildings', 'parking'], hours: 'Open 24 hours', openNow: true, blurb: '612 spaces. Pay by plate at level 1.' },
   'p-cafe-1': { categories: ['food'], hours: 'Open until 21:00', openNow: true },
@@ -176,10 +177,10 @@ export const placeMeta: Record<Id, PlaceMeta> = {
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString()
 
 export const events: CampusEvent[] = [
-  { id: 'e-1', title: 'Open mic night', start: inHours(1.5), end: inHours(3.5), location: 'Black box theater', buildingId: 'b-art' },
-  { id: 'e-2', title: 'Late study hall with free coffee', start: inHours(3), end: inHours(7), location: 'Quiet reading room', buildingId: 'b-lib' },
-  { id: 'e-3', title: 'Robotics club build session', start: inHours(19), end: inHours(22), location: 'Maker space', buildingId: 'b-eng' },
-  { id: 'e-4', title: 'Career fair: engineering and data', start: inHours(26), end: inHours(31), location: 'Ballroom', buildingId: 'b-uni' },
+  { id: 'e-1', title: 'Open mic night', start: inHours(1.5), end: inHours(3.5), location: 'Scene Dock Theatre', buildingId: 'b-art' },
+  { id: 'e-2', title: 'Late study hall with free coffee', start: inHours(3), end: inHours(7), location: 'Grand reading room', buildingId: 'b-lib' },
+  { id: 'e-3', title: 'Trojan robotics build session', start: inHours(19), end: inHours(22), location: 'Maker space', buildingId: 'b-eng' },
+  { id: 'e-4', title: 'Viterbi career fair: engineering and data', start: inHours(26), end: inHours(31), location: 'Trojan Grand Ballroom', buildingId: 'b-uni' },
   { id: 'e-5', title: 'Indoor climbing intro clinic', start: inHours(45), end: inHours(47), location: 'Climbing wall', buildingId: 'b-rec' },
 ]
 
@@ -260,7 +261,7 @@ function lengthM(path: LngLat[]) {
 function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
   const [tx, ty] = project(to)
   const [ox, oy] = project(ORIGIN)
-  // Safest hugs the lit avenue on the west edge; fastest cuts through Lot C and the quad.
+  // Safest hugs the lit avenue on the west edge; fastest cuts through Lot 6 and the quad.
   const waypoints: [number, number][] =
     kind === 'safest'
       ? [[ox, oy], [ox, ty + 16], [tx, ty + 16], [tx, ty]]
@@ -278,7 +279,7 @@ function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
     durationS: Math.round(distanceM / SPEED_MPS[mode] + wait),
     risk: kind === 'safest' ? { mean: 0.13, max: 0.18 } : { mean: 0.49, max: 0.74 },
     segments,
-    warnings: kind === 'safest' ? [] : ['Crosses Lot C, which is poorly lit after dark'],
+    warnings: kind === 'safest' ? [] : ['Crosses Lot 6, which is poorly lit after dark'],
   }
 }
 

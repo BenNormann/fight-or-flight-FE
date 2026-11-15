@@ -1,4 +1,4 @@
-import { Flame, Footprints, Phone, Route, Share2, ShieldCheck, Users } from 'lucide-react'
+import { FlameIcon, FootprintsIcon, PathIcon, PhoneIcon, ShareNetworkIcon, ShieldCheckIcon, SirenIcon, UsersThreeIcon } from '@phosphor-icons/react'
 import { ORIGIN, pois, project } from '@/demo'
 import { useAppStore } from '@/state/store'
 import { Card, ListRow, Section, ViewHeader, notify } from '@/ui'
@@ -31,25 +31,26 @@ export default function SafetyView() {
     <div data-testid="view-safety">
       <ViewHeader title="Safety" subtitle="Help and safer ways to get around campus" onBack={back} />
       <Card className="flex items-center gap-3">
-        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-full bg-destructive text-destructive-foreground">
-          <Phone className="size-5" />
+        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
+          <SirenIcon className="size-5" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="title-3">In danger right now?</p>
-          <p className="body-6 text-muted-foreground">Call 911. Campus police answer 24 hours.</p>
+          <p className="body-6 text-muted-foreground">USC DPS and 911 answer 24 hours.</p>
         </div>
         <button
           type="button"
           onClick={() => notConnected('Calling campus police')}
-          className="button-sm h-tap shrink-0 rounded-xl bg-destructive px-3 text-destructive-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+          className="button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full bg-destructive px-4 text-destructive-foreground outline-none transition-transform duration-200 hover:bg-destructive/90 focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
         >
-          Call
+          <PhoneIcon aria-hidden weight="fill" className="size-4" />
+          Call 911
         </button>
       </Card>
 
       <Section className="mt-6" title="Get there safely">
         <ListRow
-          icon={<Route />}
+          icon={<PathIcon />}
           title="Safest route to a building"
           subtitle="Lit paths past emergency phones"
           onClick={() => {
@@ -57,21 +58,23 @@ export default function SafetyView() {
             directionsTo(null)
           }}
         />
-        <ListRow icon={<Users />} title="Request a safety escort" subtitle="A trained walker meets you" onClick={() => notConnected('Requesting an escort')} />
-        <ListRow icon={<Footprints />} title="Walk with me" subtitle="A friend follows your trip live" onClick={() => notConnected('Starting Walk with me')} />
-        <ListRow icon={<Share2 />} title="Share my location" subtitle="Send a live link for one hour" onClick={() => notConnected('Sharing your location')} />
+        <ListRow icon={<UsersThreeIcon />} title="Request a safety escort" subtitle="A trained walker meets you" onClick={() => notConnected('Requesting an escort')} />
+        <ListRow icon={<FootprintsIcon />} title="Walk with me" subtitle="A friend follows your trip live" onClick={() => notConnected('Starting Walk with me')} />
+        <ListRow icon={<ShareNetworkIcon />} title="Share my location" subtitle="Send a live link for one hour" onClick={() => notConnected('Sharing your location')} />
       </Section>
 
       <Section title="Nearby">
         {blue ? (
-          <ListRow icon={<Phone />} title="Nearest emergency phone" subtitle={blue.name} onClick={() => select({ kind: 'poi', id: blue.id })} />
+          <ListRow icon={<PhoneIcon />} title="Nearest emergency phone" subtitle={blue.name} onClick={() => select({ kind: 'poi', id: blue.id })} />
         ) : null}
-        <ListRow icon={<ShieldCheck />} title="Campus police station" subtitle="Church St, staffed 24 hours" onClick={() => select({ kind: 'poi', id: 'p-dps' })} />
+        <ListRow icon={<ShieldCheckIcon />} title="USC Department of Public Safety" subtitle="McClintock Ave, staffed 24 hours" onClick={() => select({ kind: 'poi', id: 'p-dps' })} />
         <ListRow
-          icon={<Flame />}
+          icon={<FlameIcon />}
           title={heatOn ? 'Hide safety heat' : 'Show safety heat on the map'}
           subtitle="Relative risk by area"
+          meta={heatOn ? 'On' : 'Off'}
           chevron={false}
+          aria-pressed={heatOn}
           onClick={() => toggleLayer('demo-safety', !heatOn)}
         />
       </Section>

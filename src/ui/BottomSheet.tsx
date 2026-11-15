@@ -65,8 +65,9 @@ export default function BottomSheet({ snap, onSnapChange, title, description, ch
         className={cn(
           'z-(--z-sheet) h-full w-full outline-none',
           'data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-full',
-          'data-[vaul-drawer-direction=bottom]:rounded-t-3xl data-[vaul-drawer-direction=bottom]:border-x data-[vaul-drawer-direction=bottom]:border-t',
-          'border-border bg-card text-card-foreground shadow-sheet',
+          // shadow-sheet carries its own 1px casing: no border on top of it (docs/DESIGN.md §3 elevation).
+          'data-[vaul-drawer-direction=bottom]:rounded-t-3xl',
+          'bg-card text-card-foreground shadow-sheet',
           floating ? 'data-[vaul-drawer-direction=bottom]:left-4 data-[vaul-drawer-direction=bottom]:right-auto md:w-100' : 'mx-auto',
         )}
       >
@@ -78,11 +79,12 @@ export default function BottomSheet({ snap, onSnapChange, title, description, ch
           onClick={() => onSnapChange(snap === 'peek' ? 'half' : snap === 'half' ? 'full' : 'peek')}
           className="mx-auto flex h-6 w-24 shrink-0 cursor-grab items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <span aria-hidden className="h-1 w-10 rounded-full bg-input/60" />
+          {/* Grabber 4×32 in muted-foreground; the button's lower half is the 8px gap to the header. */}
+          <span aria-hidden className="h-1 w-8 rounded-full bg-muted-foreground" />
         </button>
         <div
           className={cn(
-            'min-h-0 flex-1 px-gutter pt-1',
+            'min-h-0 flex-1 px-gutter',
             snap === 'full' ? 'overflow-y-auto overscroll-contain' : 'overflow-hidden',
           )}
           style={{ paddingBottom: 'calc(var(--safe-bottom) + 32px)' }}

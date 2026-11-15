@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { CaretLeftIcon, CaretRightIcon } from '@phosphor-icons/react'
 import { motion, useReducedMotion } from 'motion/react'
 import type { ReactNode } from 'react'
 import { cn } from '@/lib/cn'
@@ -31,7 +31,7 @@ export function SidePanel({ open, onOpenChange, top, children, label }: SidePane
       transition={{ duration: reduce ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
-        className="flex h-full w-full flex-col border-r border-border bg-card text-card-foreground shadow-overlay"
+        className="flex h-full w-full flex-col bg-card text-card-foreground shadow-overlay"
         inert={!open}
       >
         <div className="shrink-0 p-4 pb-2">{top}</div>
@@ -43,11 +43,11 @@ export function SidePanel({ open, onOpenChange, top, children, label }: SidePane
         aria-label={open ? 'Collapse side panel' : 'Expand side panel'}
         aria-expanded={open}
         className={cn(
-          'absolute top-1/2 -right-6 grid h-16 w-6 -translate-y-1/2 place-items-center rounded-r-lg border border-border bg-card text-muted-foreground shadow-float',
+          'absolute top-1/2 -right-6 grid h-16 w-6 -translate-y-1/2 place-items-center rounded-r-lg bg-card text-muted-foreground shadow-float',
           'outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >
-        {open ? <ChevronLeft className="size-4" /> : <ChevronRight className="size-4" />}
+        {open ? <CaretLeftIcon className="size-4" /> : <CaretRightIcon className="size-4" />}
       </button>
     </motion.aside>
   )

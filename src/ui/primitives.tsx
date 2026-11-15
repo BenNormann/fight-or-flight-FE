@@ -1,25 +1,39 @@
-import { ArrowLeft, ChevronRight, X } from 'lucide-react'
+import { ArrowLeftIcon, CaretRightIcon, IconContext, XIcon } from '@phosphor-icons/react'
 import type { ComponentProps, ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import { riskBand } from '@/lib/risk'
 import { Button as VendorButton } from '@/ui/vendor/button'
+import { HaloSwitch } from '@/ui/vendor/halo-switch'
+import { ScrollFade } from '@/ui/vendor/scroll-fade'
 
 /*
- * Small shared building blocks for every view. Text uses the named styles from
- * tokens.css (title-3, body-6, caption-4 …). All controls are ≥ 44px tall,
- * have a focus ring and press at scale 0.98.
+ * Small shared building blocks for every view (docs/DESIGN.md §3). Text uses the
+ * named styles from tokens.css (title-3, body-6, caption-4 …). All controls are
+ * ≥ 44px tall, have a focus ring, shift on hover and press at scale 0.98.
+ * Icons are Phosphor: Regular at rest, Fill when selected, Duotone in empty states.
  */
 
 const focus = 'outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background'
 const press = 'transition-[transform,background-color,color,border-color] duration-200 active:scale-[0.98]'
+const brandFill = 'relative bg-brand text-brand-foreground hover:bg-brand-hover active:bg-brand-pressed dark:shadow-brand'
+
+/** The signature: a 4px gold dot at the top right of every cardinal fill. Parent must be `relative`. */
+export function Keystone({ className }: { className?: string }) {
+  return <span aria-hidden data-slot="keystone" className={cn('pointer-events-none absolute top-1.5 right-1.5 size-1 rounded-full bg-gold', className)} />
+}
+
+/** Sets the Phosphor weight for every icon passed in as a node. */
+function IconWeight({ weight, children }: { weight: 'regular' | 'fill' | 'duotone'; children: ReactNode }) {
+  return <IconContext.Provider value={{ weight }}>{children}</IconContext.Provider>
+}
 
 type ButtonTone = 'brand' | 'primary' | 'secondary' | 'ghost' | 'destructive'
 const buttonTones: Record<ButtonTone, string> = {
-  brand: 'bg-brand text-brand-foreground hover:bg-brand/90',
-  primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
-  secondary: 'border border-border bg-secondary text-secondary-foreground hover:bg-accent',
-  ghost: 'text-foreground hover:bg-accent',
-  destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+  brand: cn('button-md', brandFill),
+  primary: 'button-sm bg-primary text-primary-foreground hover:bg-primary/90',
+  secondary: 'button-sm border border-border bg-secondary text-secondary-foreground hover:bg-accent',
+  ghost: 'button-sm text-foreground hover:bg-accent',
+  destructive: 'button-sm bg-destructive text-destructive-foreground hover:bg-destructive/90',
 }
 
 export interface ButtonProps extends ComponentProps<'button'> {
@@ -29,7 +43,7 @@ export interface ButtonProps extends ComponentProps<'button'> {
   block?: boolean
 }
 
-/** Text button. 44px tall, 12px horizontal padding. */
+/** Text button. 44px tall, padding 8 / 12 (16 inline when full width). `brand` is the one main action per view. */
 export function Button({ tone = 'secondary', icon, block, className, children, ...props }: ButtonProps) {
   return (
     <VendorButton
@@ -37,17 +51,18 @@ export function Button({ tone = 'secondary', icon, block, className, children, .
       size={null}
       variant={null}
       className={cn(
-        'button-sm h-tap gap-2 rounded-xl px-3 [&_svg:not([class*=size-])]:size-5',
+        'min-h-tap gap-2 rounded-xl px-3 py-2 [&_svg:not([class*=size-])]:size-4',
         focus,
         press,
         buttonTones[tone],
-        block && 'w-full',
+        block && 'w-full px-4',
         className,
       )}
       {...props}
     >
       {icon}
       {children}
+      {tone === 'brand' ? <Keystone /> : null}
     </VendorButton>
   )
 }
@@ -55,28 +70,30 @@ export function Button({ tone = 'secondary', icon, block, className, children, .
 export interface IconButtonProps extends ComponentProps<'button'> {
   label: string
   icon: ReactNode
-  tone?: 'ghost' | 'secondary' | 'glass'
+  /** `glass` (kept for compatibility) and `float` are the map control: opaque card with a float shadow. */
+  tone?: 'ghost' | 'secondary' | 'glass' | 'float'
 }
 
-/** Round 44px icon-only button with an accessible name. */
+/** Round 44px icon-only button with an accessible name. With `aria-pressed`, the active glyph turns brand ink. */
 export function IconButton({ label, icon, tone = 'ghost', className, ...props }: IconButtonProps) {
+  const pressed = props['aria-pressed'] === true || props['aria-pressed'] === 'true'
   return (
     <button
       type="button"
       aria-label={label}
       title={label}
       className={cn(
-        'inline-grid size-tap shrink-0 place-items-center rounded-full [&_svg]:size-5',
+        'inline-grid size-tap shrink-0 place-items-center rounded-full text-foreground [&_svg]:size-5 aria-pressed:text-brand-ink',
         focus,
         press,
-        tone === 'ghost' && 'text-foreground hover:bg-accent',
-        tone === 'secondary' && 'border border-border bg-secondary text-foreground hover:bg-accent',
-        tone === 'glass' && 'pointer-events-auto border border-border bg-glass text-foreground shadow-float backdrop-blur-glass hover:bg-card',
+        tone === 'ghost' && 'hover:bg-accent',
+        tone === 'secondary' && 'border border-border bg-secondary hover:bg-accent',
+        (tone === 'glass' || tone === 'float') && 'pointer-events-auto bg-card shadow-float hover:bg-accent',
         className,
       )}
       {...props}
     >
-      {icon}
+      <IconWeight weight={pressed ? 'fill' : 'regular'}>{icon}</IconWeight>
     </button>
   )
 }
@@ -84,7 +101,7 @@ export function IconButton({ label, icon, tone = 'ghost', className, ...props }:
 export interface ChipProps extends ComponentProps<'button'> {
   icon?: ReactNode
   pressed?: boolean
-  /** Over the map: frosted with a float shadow. */
+  /** Over the map: opaque card with `shadow-chip`. Otherwise (in a sheet): secondary fill, no shadow. */
   overMap?: boolean
 }
 
@@ -94,34 +111,54 @@ export function Chip({ icon, pressed, overMap, className, children, ...props }: 
       type="button"
       aria-pressed={pressed}
       className={cn(
-        'button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full border px-4 [&_svg]:size-4',
+        'button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full px-4 whitespace-nowrap [&_svg]:size-4',
         focus,
         press,
         pressed
-          ? 'border-primary bg-primary text-primary-foreground'
+          ? 'bg-selected text-selected-foreground hover:bg-selected-hover'
           : overMap
-            ? 'pointer-events-auto border-border bg-glass text-foreground shadow-float backdrop-blur-glass hover:bg-card'
-            : 'border-border bg-secondary text-secondary-foreground hover:bg-accent',
+            ? 'pointer-events-auto bg-card text-card-foreground shadow-chip hover:bg-accent'
+            : 'bg-secondary text-secondary-foreground hover:bg-accent',
         className,
       )}
       {...props}
     >
-      {icon}
+      {icon ? <IconWeight weight={pressed ? 'fill' : 'regular'}>{icon}</IconWeight> : null}
       {children}
     </button>
   )
 }
 
-/** Horizontally scrolling row; bleeds to the screen edge on mobile. */
-export function ChipRow({ label, className, children }: { label: string; className?: string; children: ReactNode }) {
+export interface ChipRowProps {
+  label: string
+  className?: string
+  children: ReactNode
+  /**
+   * Bleed to both screen edges (`-mx-gutter`) from inside a gutter-padded parent.
+   * Turn off when the parent is already full width.
+   */
+  bleed?: boolean
+}
+
+/**
+ * Horizontally scrolling chip row (docs/DESIGN.md §3 chip row). The scroller is
+ * masked with `mask-fade-x` while content hides behind an edge. 8px block padding
+ * cancelled by `-my-2` leaves room for `shadow-chip` inside the clip.
+ */
+export function ChipRow({ label, className, children, bleed = true }: ChipRowProps) {
   return (
-    <div
+    <ScrollFade
       role="toolbar"
       aria-label={label}
-      className={cn('flex gap-2 overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden', className)}
+      data-slot="chip-row"
+      className={cn(
+        'flex gap-2 overscroll-x-contain px-gutter py-2 -my-2 scroll-px-4',
+        bleed && '-mx-gutter',
+        className,
+      )}
     >
       {children}
-    </div>
+    </ScrollFade>
   )
 }
 
@@ -131,15 +168,19 @@ export interface ListRowProps extends Omit<ComponentProps<'button'>, 'title'> {
   subtitle?: ReactNode
   meta?: ReactNode
   chevron?: boolean
+  /** Selected row: `brand-subtle` fill and a brand ink tile icon. */
+  selected?: boolean
 }
 
 /** Tappable list row: icon tile, title, subtitle, trailing meta. */
-export function ListRow({ icon, title, subtitle, meta, chevron = true, className, ...props }: ListRowProps) {
+export function ListRow({ icon, title, subtitle, meta, chevron = true, selected, className, ...props }: ListRowProps) {
   return (
     <button
       type="button"
+      aria-current={selected || undefined}
       className={cn(
-        '-mx-2 flex min-h-14 w-[calc(100%+16px)] items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-accent',
+        '-mx-2 flex min-h-14 w-[calc(100%+16px)] items-center gap-3 rounded-xl px-2 py-2 text-left',
+        selected ? 'bg-brand-subtle text-brand-subtle-foreground' : 'hover:bg-accent',
         focus,
         press,
         className,
@@ -147,8 +188,14 @@ export function ListRow({ icon, title, subtitle, meta, chevron = true, className
       {...props}
     >
       {icon ? (
-        <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted text-foreground [&_svg]:size-5">
-          {icon}
+        <span
+          aria-hidden
+          className={cn(
+            'grid size-10 shrink-0 place-items-center rounded-lg [&_svg]:size-5',
+            selected ? 'bg-card text-brand-ink' : 'bg-muted text-foreground',
+          )}
+        >
+          <IconWeight weight={selected ? 'fill' : 'regular'}>{icon}</IconWeight>
         </span>
       ) : null}
       <span className="min-w-0 flex-1">
@@ -156,7 +203,7 @@ export function ListRow({ icon, title, subtitle, meta, chevron = true, className
         {subtitle ? <span className="body-6 block truncate text-muted-foreground">{subtitle}</span> : null}
       </span>
       {meta ? <span className="caption-4 shrink-0 text-muted-foreground">{meta}</span> : null}
-      {chevron ? <ChevronRight aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : null}
+      {chevron ? <CaretRightIcon aria-hidden className="size-4 shrink-0 text-muted-foreground" /> : null}
     </button>
   )
 }
@@ -164,24 +211,24 @@ export function ListRow({ icon, title, subtitle, meta, chevron = true, className
 export interface ViewHeaderProps {
   title: ReactNode
   subtitle?: ReactNode
-  /** Small line above the title (category, code). */
+  /** Small line above the title (category, code), in brand ink. */
   eyebrow?: ReactNode
   onBack?: () => void
   onClose?: () => void
   backLabel?: string
 }
 
-/** Header for a sheet / panel view. The title is the view's heading. */
+/** Header for a sheet / panel view. The title is the view's heading. No divider; 16px gap below. */
 export function ViewHeader({ title, subtitle, eyebrow, onBack, onClose, backLabel = 'Back' }: ViewHeaderProps) {
   return (
     <header className="flex items-start gap-2 pb-4">
-      {onBack ? <IconButton className="-ml-3" label={backLabel} icon={<ArrowLeft />} onClick={onBack} /> : null}
-      <div className={cn('min-w-0 flex-1', onBack && 'pt-2')}>
-        {eyebrow ? <p className="caption-4 text-muted-foreground">{eyebrow}</p> : null}
+      {onBack ? <IconButton className="-ml-3" label={backLabel} icon={<ArrowLeftIcon />} onClick={onBack} /> : null}
+      <div className={cn('min-w-0 flex-1', (onBack || onClose) && 'pt-2')}>
+        {eyebrow ? <p className="caption-4 text-brand-ink">{eyebrow}</p> : null}
         <h2 className="heading-6">{title}</h2>
         {subtitle ? <p className="body-6 mt-1 text-muted-foreground">{subtitle}</p> : null}
       </div>
-      {onClose ? <IconButton className="-mr-3" label="Close" icon={<X />} onClick={onClose} tone="ghost" /> : null}
+      {onClose ? <IconButton className="-mr-3" label="Close" icon={<XIcon />} onClick={onClose} tone="ghost" /> : null}
     </header>
   )
 }
@@ -209,27 +256,28 @@ export interface ActionItem {
   primary?: boolean
 }
 
-/** Google Maps style row of round actions with labels underneath. */
+/** Google Maps style row of pill actions; scrolls with the same edge fade as the chip row. */
 export function ActionBar({ actions, className }: { actions: ActionItem[]; className?: string }) {
   return (
-    <div className={cn('-mx-gutter flex gap-2 overflow-x-auto px-gutter [scrollbar-width:none]', className)}>
+    <ScrollFade className={cn('-mx-gutter -my-2 flex gap-2 px-gutter py-2 scroll-px-4', className)}>
       {actions.map((a) => (
         <button
           key={a.id}
           type="button"
           onClick={a.onClick}
           className={cn(
-            'button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full px-4 [&_svg]:size-4',
+            'button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full px-4 whitespace-nowrap [&_svg]:size-4',
             focus,
             press,
-            a.primary ? 'bg-brand text-brand-foreground hover:bg-brand/90' : 'border border-border bg-secondary hover:bg-accent',
+            a.primary ? brandFill : 'border border-border bg-secondary text-secondary-foreground hover:bg-accent',
           )}
         >
           {a.icon}
           {a.label}
+          {a.primary ? <Keystone className="right-2.5" /> : null}
         </button>
       ))}
-    </div>
+    </ScrollFade>
   )
 }
 
@@ -241,15 +289,18 @@ export interface SwitchRowProps {
   onCheckedChange: (on: boolean) => void
 }
 
-/** Full-row toggle. The whole row is the 44px+ target. */
+/**
+ * Full-row toggle (docs/DESIGN.md §3 switch row). The row is a `<label>`, so the
+ * whole row is the target and names the switch; the track centres on the text block.
+ */
 export function SwitchRow({ label, description, icon, checked, onCheckedChange }: SwitchRowProps) {
   return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      onClick={() => onCheckedChange(!checked)}
-      className={cn('-mx-2 flex min-h-14 w-[calc(100%+16px)] items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-accent', focus)}
+    <label
+      data-slot="switch-row"
+      className={cn(
+        '-mx-2 flex min-h-14 w-[calc(100%+16px)] cursor-pointer items-center gap-3 rounded-xl px-2 py-2 text-left hover:bg-accent',
+        'transition-colors duration-200',
+      )}
     >
       {icon ? (
         <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted [&_svg]:size-5">
@@ -260,29 +311,17 @@ export function SwitchRow({ label, description, icon, checked, onCheckedChange }
         <span className="title-3 block">{label}</span>
         {description ? <span className="body-6 block text-muted-foreground">{description}</span> : null}
       </span>
-      <span
-        aria-hidden
-        className={cn(
-          'relative h-6 w-10 shrink-0 rounded-full border transition-colors duration-200',
-          checked ? 'border-primary bg-primary' : 'border-input bg-muted',
-        )}
-      >
-        <span
-          className={cn(
-            'absolute top-0.5 left-0.5 size-4 rounded-full transition-transform duration-200',
-            checked ? 'translate-x-4 bg-primary-foreground' : 'bg-input',
-          )}
-        />
-      </span>
-    </button>
+      <HaloSwitch checked={checked} onCheckedChange={(on) => onCheckedChange(on)} />
+    </label>
   )
 }
 
+/** Empty state: card tile, brand-subtle circle with a duotone icon, one line each, one secondary action. */
 export function EmptyState({ icon, title, body, action }: { icon: ReactNode; title: string; body: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center rounded-2xl border border-dashed border-border px-6 py-8 text-center">
-      <span aria-hidden className="grid size-12 place-items-center rounded-full bg-muted text-muted-foreground [&_svg]:size-5">
-        {icon}
+    <div className="flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-8 text-center">
+      <span aria-hidden className="grid size-12 place-items-center rounded-full bg-brand-subtle text-brand-ink [&_svg]:size-6">
+        <IconWeight weight="duotone">{icon}</IconWeight>
       </span>
       <p className="title-3 mt-3">{title}</p>
       <p className="body-6 mt-1 max-w-xs text-muted-foreground">{body}</p>
@@ -303,7 +342,12 @@ export function RiskBadge({ score, prefix }: { score: number; prefix?: string })
   )
 }
 
+export interface CardProps extends ComponentProps<'div'> {
+  /** `shadow-raised` instead of the border. Shadow or border, never both. */
+  raised?: boolean
+}
+
 /** Card surface used for grouped content inside a view. */
-export function Card({ className, ...props }: ComponentProps<'div'>) {
-  return <div className={cn('rounded-2xl border border-border bg-card p-4', className)} {...props} />
+export function Card({ className, raised, ...props }: CardProps) {
+  return <div className={cn('rounded-2xl bg-card p-4', raised ? 'shadow-raised' : 'border border-border', className)} {...props} />
 }

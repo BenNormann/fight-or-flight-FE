@@ -1,6 +1,7 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Suspense, type ReactNode } from 'react'
 import ActiveRoutePill from '@/features/route/ActiveRoutePill'
+import { cn } from '@/lib/cn'
 import { useAppStore } from '@/state/store'
 import { BottomSheet, SHEET_PEEK_PX, SIDE_PANEL_PX, SidePanel } from '@/ui'
 import { CategoryChips, ControlStack, DirectionsFab, MapSearch } from './controls'
@@ -26,7 +27,7 @@ export function TouchLayout({ tablet, footer }: { tablet: boolean; footer: React
         <div className="px-gutter md:w-100 md:pr-0" style={{ paddingLeft: 'calc(var(--safe-left) + 16px)' }}>
           <MapSearch />
         </div>
-        <CategoryChips className="pointer-events-auto px-gutter py-1" />
+        <CategoryChips bleed={false} className="pointer-events-auto" />
         <AnimatePresence>
           {active ? (
             <motion.div key="pill" className="flex justify-center px-gutter" {...fade}>
@@ -85,7 +86,8 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
         animate={{ x: mapLeft }}
         transition={{ duration: reduce ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <CategoryChips className={open ? "pointer-events-auto max-w-[calc(100vw-480px)]" : "pointer-events-auto max-w-[calc(100vw-80px)]"} />
+        {/* Left bleed only: chip text lines up with the route pill below; the right edge fades under the mask. */}
+        <CategoryChips bleed={false} className={cn('pointer-events-auto -ml-4', open ? 'max-w-[calc(100vw-464px)]' : 'max-w-[calc(100vw-64px)]')} />
         <AnimatePresence>
           {active ? (
             <motion.div key="pill" className="w-full max-w-sm" {...fade}>
@@ -96,7 +98,7 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
       </motion.div>
 
       <div className="pointer-events-none absolute right-6 bottom-6 z-(--z-chrome) flex flex-col items-end gap-3">
-        <ControlStack />
+        <ControlStack zoom />
       </div>
     </>
   )

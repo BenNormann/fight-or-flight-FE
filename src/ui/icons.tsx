@@ -1,46 +1,53 @@
 import {
-  Bike,
-  BookOpen,
-  Building2,
-  CalendarDays,
-  Coffee,
-  DoorOpen,
-  MapPin,
-  Phone,
-  ShieldCheck,
-  SquareParking,
-  Utensils,
-  type LucideIcon,
-} from 'lucide-react'
+  BicycleIcon,
+  BookOpenIcon,
+  BuildingsIcon,
+  CalendarDotsIcon,
+  CoffeeIcon,
+  DoorOpenIcon,
+  ForkKnifeIcon,
+  LetterCirclePIcon,
+  MapPinIcon,
+  PhoneIcon,
+  ShieldCheckIcon,
+  type Icon,
+  type IconWeight,
+} from '@phosphor-icons/react'
 
-/** One icon per category chip and place type, so the map and lists agree. */
-const categoryIcon: Record<string, LucideIcon> = {
-  buildings: Building2,
-  food: Utensils,
-  study: BookOpen,
-  parking: SquareParking,
-  events: CalendarDays,
-  safety: ShieldCheck,
+/** One Phosphor icon per category chip and place type, so the map and lists agree. */
+const categoryIcon: Record<string, Icon> = {
+  buildings: BuildingsIcon,
+  food: ForkKnifeIcon,
+  study: BookOpenIcon,
+  parking: LetterCirclePIcon,
+  events: CalendarDotsIcon,
+  safety: ShieldCheckIcon,
 }
 
-const placeTypeIcon: Record<string, LucideIcon> = {
-  building: Building2,
-  room: DoorOpen,
-  event: CalendarDays,
-  blue_light: Phone,
-  dps: ShieldCheck,
-  cafe: Coffee,
-  parking: SquareParking,
-  bike_rack: Bike,
-  entrance: DoorOpen,
+const placeTypeIcon: Record<string, Icon> = {
+  building: BuildingsIcon,
+  room: DoorOpenIcon,
+  event: CalendarDotsIcon,
+  blue_light: PhoneIcon,
+  dps: ShieldCheckIcon,
+  cafe: CoffeeIcon,
+  parking: LetterCirclePIcon,
+  bike_rack: BicycleIcon,
+  entrance: DoorOpenIcon,
 }
 
-export function PlaceIcon({ type, className }: { type: string; className?: string }) {
-  const Icon = placeTypeIcon[type] ?? MapPin
-  return <Icon aria-hidden className={className} />
+interface GlyphProps {
+  className?: string
+  /** Omit to inherit from the nearest Phosphor `IconContext` (e.g. Fill inside a pressed chip). */
+  weight?: IconWeight
 }
 
-export function CategoryIcon({ id, className }: { id: string; className?: string }) {
-  const Icon = categoryIcon[id] ?? MapPin
-  return <Icon aria-hidden className={className} />
+export function PlaceIcon({ type, className, weight }: GlyphProps & { type: string }) {
+  const Glyph = placeTypeIcon[type] ?? MapPinIcon
+  return <Glyph aria-hidden className={className} weight={weight} />
+}
+
+export function CategoryIcon({ id, className, weight }: GlyphProps & { id: string }) {
+  const Glyph = categoryIcon[id] ?? MapPinIcon
+  return <Glyph aria-hidden className={className} weight={weight} />
 }

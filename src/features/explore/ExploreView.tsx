@@ -1,4 +1,4 @@
-import { CalendarDays, Navigation, ShieldCheck } from 'lucide-react'
+import { CalendarDotsIcon, NavigationArrowIcon, ShieldCheckIcon } from '@phosphor-icons/react'
 import { buildings, events, placeMeta } from '@/demo'
 import { useAppStore } from '@/state/store'
 import { ActionBar, ListRow, PlaceIcon, Section, ViewHeader, dayLabel, formatClock } from '@/ui'
@@ -15,14 +15,19 @@ export default function ExploreView() {
   return (
     <div data-testid="view-explore">
       <ViewHeader
-        title="Explore Northfield"
-        subtitle={`${buildings.length} buildings on campus · ${events.length} events this week`}
+        eyebrow={<span className="text-brand-ink">USC · Sample campus</span>}
+        title="Explore University Park"
+        subtitle={
+          <>
+            <span className="font-mono">{buildings.length}</span> buildings · <span className="font-mono">{events.length}</span> events this week
+          </>
+        }
       />
       <ActionBar
         actions={[
-          { id: 'dir', label: 'Directions', icon: <Navigation />, primary: true, onClick: () => directionsTo(null) },
-          { id: 'events', label: 'Events', icon: <CalendarDays />, onClick: () => openView('events') },
-          { id: 'safety', label: 'Safety', icon: <ShieldCheck />, onClick: () => openView('safety') },
+          { id: 'dir', label: 'Directions', icon: <NavigationArrowIcon weight="fill" />, primary: true, onClick: () => directionsTo(null) },
+          { id: 'events', label: 'Events', icon: <CalendarDotsIcon />, onClick: () => openView('events') },
+          { id: 'safety', label: 'Safety', icon: <ShieldCheckIcon />, onClick: () => openView('safety') },
         ]}
       />
 
@@ -30,7 +35,11 @@ export default function ExploreView() {
         className="mt-6"
         title="Open now"
         action={
-          <button type="button" className="button-sm min-h-tap rounded-lg px-2 hover:bg-accent" onClick={() => search('', 'buildings')}>
+          <button
+            type="button"
+            className="button-sm -mr-2 min-h-tap rounded-lg px-2 text-brand-ink outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98]"
+            onClick={() => search('', 'buildings')}
+          >
             See all
           </button>
         }
@@ -41,6 +50,7 @@ export default function ExploreView() {
             icon={<PlaceIcon type="building" />}
             title={b.name}
             subtitle={placeMeta[b.id]?.hours}
+            meta={<span className="font-mono">{b.code}</span>}
             onClick={() => select({ kind: 'building', id: b.id })}
           />
         ))}
@@ -52,7 +62,8 @@ export default function ExploreView() {
             key={e.id}
             icon={<PlaceIcon type="event" />}
             title={e.title}
-            subtitle={`${dayLabel(e.start)} · ${formatClock(e.start)} · ${e.location ?? ''}`}
+            subtitle={[dayLabel(e.start), e.location].filter(Boolean).join(' · ')}
+            meta={<span className="font-mono">{formatClock(e.start)}</span>}
             onClick={() => select({ kind: 'event', id: e.id })}
           />
         ))}
