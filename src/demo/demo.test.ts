@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { SAFETY_HEAT_LAYER, buildings, demoLayerDefaults, demoLayers, demoRoutes, demoSearch, project, rooms, unproject } from '.'
+import { SAFETY_HEAT_LAYER, buildings, demoLayerDefaults, demoLayers, demoRoutes, demoSearch, maneuverFor, project, rooms, stepsFromPath, unproject } from '.'
 import { demoRiskCells } from './heat'
 
 describe('demo data', () => {
@@ -32,6 +32,27 @@ describe('demo data', () => {
     expect(walk.map((r) => r.kind).sort()).toEqual(['fastest', 'safest'])
     expect(walk[0]!.durationS).toBeGreaterThan(bike[0]!.durationS)
     expect(demoRoutes('nope', 'walk')).toEqual([])
+  })
+
+  it('routes carry turn by turn steps derived from their path', () => {
+    const safest = demoRoutes('b-eng', 'walk').find((r) => r.kind === 'safest')!
+    // North on Trousdale, left (west) onto Childs Way, right up to the entrance, arrive.
+    expect(safest.steps.map((s) => s.maneuver)).toEqual(['depart', 'left', 'right', 'arrive'])
+    expect(safest.steps[0]).toMatchObject({ offsetM: 0, name: 'Trousdale Pkwy' })
+    expect(safest.steps[1]!.name).toBe('Childs Way')
+    const last = safest.steps.at(-1)!
+    expect(Math.abs(last.offsetM - safest.distanceM)).toBeLessThan(3)
+    // Legs add up to the route and offsets increase.
+    expect(safest.steps.reduce((m, s) => m + s.distanceM, 0)).toBe(last.offsetM)
+    for (let i = 1; i < safest.steps.length; i++) expect(safest.steps[i]!.offsetM).toBeGreaterThan(safest.steps[i - 1]!.offsetM)
+  })
+
+  it('turn angles map to maneuvers and zero length legs are dropped', () => {
+    expect([5, -30, 90, -150, 178].map(maneuverFor)).toEqual(['straight', 'slight-left', 'right', 'sharp-left', 'u-turn'])
+    const p = unproject(800, 800)
+    const steps = stepsFromPath([p, p, unproject(800, 700), unproject(800, 600)], ['A', 'A', 'B'])
+    expect(steps.map((s) => s.maneuver)).toEqual(['depart', 'straight', 'arrive'])
+    expect(steps[1]!.name).toBe('B')
   })
 
   it('demo heat is H3 cells with scores in 0..1 and closed rings', () => {

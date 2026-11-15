@@ -6,7 +6,9 @@ import { cn } from '@/lib/cn'
 import { env } from '@/lib/env'
 import { useAppStore } from '@/state/store'
 import { SHEET_PEEK_PX, Toaster, useBreakpoint, useThemeController } from '@/ui'
+import NavAnnouncer from '@/features/route/NavAnnouncer'
 import { isLoginPath } from './authGate'
+import { useNavigationDriver } from './useNavigationDriver'
 import { DesktopLayout, TouchLayout } from './layouts'
 import { useStoreToUrl } from './urlSync'
 
@@ -32,6 +34,7 @@ export function Shell() {
   useThemeController()
   useStoreToUrl()
   useLiveLocation(useAppStore((s) => s.liveLocationOptIn))
+  useNavigationDriver()
   const breakpoint = useBreakpoint()
   const config = useAppConfig()
   const capabilities = useCapabilities()
@@ -81,6 +84,7 @@ export function Shell() {
       <Suspense fallback={null}>
         <Toaster />
       </Suspense>
+      <NavAnnouncer />
       <Outlet />
     </div>
   )

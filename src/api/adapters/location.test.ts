@@ -1,15 +1,20 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { LOCATION_PATH, postLocation, toLocationBody } from './location'
+import { LOCATION_PATH, locationBody, postLocation, toLocationBody } from './location'
 
 const fix = { lngLat: [-118.285, 34.022] as [number, number], accuracyM: 12, at: '2026-11-14T08:00:00.000Z' }
 
 describe('location adapter', () => {
   afterEach(() => vi.unstubAllGlobals())
 
-  it('converts a fix to the backend body, omitting unknown heading and speed', () => {
+  it('converts a fix to the backend body, omitting unknown speed', () => {
     expect(toLocationBody(fix)).toEqual({ lat: 34.022, lng: -118.285, accuracy_m: 12, ts: fix.at })
-    expect(toLocationBody({ ...fix, headingDeg: 90, speedMps: 1.4 })).toMatchObject({ heading_deg: 90, speed_mps: 1.4 })
-    expect(toLocationBody({ ...fix, headingDeg: Number.NaN })).not.toHaveProperty('heading_deg')
+    expect(toLocationBody({ ...fix, speedMps: 1.4 })).toMatchObject({ speed_mps: 1.4 })
+    expect(toLocationBody({ ...fix, speedMps: Number.NaN })).not.toHaveProperty('speed_mps')
+  })
+
+  it('never sends direction, and the body schema rejects it', () => {
+    expect(toLocationBody({ ...fix, headingDeg: 90 })).not.toHaveProperty('heading_deg')
+    expect(locationBody.safeParse({ lat: 34, lng: -118, accuracy_m: 5, ts: fix.at, heading_deg: 90 }).success).toBe(false)
   })
 
   it('rejects impossible coordinates', () => {

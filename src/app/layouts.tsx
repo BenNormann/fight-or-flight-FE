@@ -1,11 +1,12 @@
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { Suspense, type ReactNode } from 'react'
-import ActiveRoutePill from '@/features/route/ActiveRoutePill'
+import ManeuverBanner from '@/features/route/ManeuverBanner'
 import { cn } from '@/lib/cn'
 import { useAppStore } from '@/state/store'
 import { BottomSheet, SHEET_PEEK_PX, SIDE_PANEL_PX, SidePanel } from '@/ui'
 import { AccountButton } from './AccountButton'
 import { CategoryChips, ControlStack, DirectionsFab, MapSearch } from './controls'
+import { NavDevControl } from './NavDevControl'
 import { ViewHost } from './ViewHost'
 
 const fade = { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.2 } }
@@ -25,20 +26,30 @@ export function TouchLayout({ tablet, footer }: { tablet: boolean; footer: React
         className="pointer-events-none absolute inset-x-0 top-0 z-(--z-chrome) flex flex-col gap-2"
         style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}
       >
-        <div className="px-gutter md:w-100 md:pr-0" style={{ paddingLeft: 'calc(var(--safe-left) + 16px)' }}>
-          <MapSearch trailing={<AccountButton />} />
-        </div>
-        <CategoryChips bleed={false} className="pointer-events-auto" />
-        <AnimatePresence>
+        {/* Navigating: the maneuver banner takes the place of search and chips. */}
+        <AnimatePresence mode="wait" initial={false}>
           {active ? (
-            <motion.div key="pill" className="flex justify-center px-gutter" {...fade}>
-              <ActiveRoutePill />
+            <motion.div key="banner" className="px-gutter md:w-100 md:pr-0" style={{ paddingLeft: 'calc(var(--safe-left) + 16px)' }} {...fade}>
+              <ManeuverBanner />
             </motion.div>
-          ) : null}
+          ) : (
+            <motion.div key="search" className="flex flex-col gap-2" {...fade}>
+              <div className="px-gutter md:w-100 md:pr-0" style={{ paddingLeft: 'calc(var(--safe-left) + 16px)' }}>
+                <MapSearch trailing={<AccountButton />} />
+              </div>
+              <CategoryChips bleed={false} className="pointer-events-auto" />
+            </motion.div>
+          )}
         </AnimatePresence>
         <AnimatePresence>
           {showLower ? (
-            <motion.div key="stack" className="flex justify-end px-gutter" style={{ paddingRight: 'calc(var(--safe-right) + 16px)' }} {...fade}>
+            <motion.div
+              key="stack"
+              className="flex items-start justify-between gap-2 px-gutter"
+              style={{ paddingLeft: 'calc(var(--safe-left) + 16px)', paddingRight: 'calc(var(--safe-right) + 16px)' }}
+              {...fade}
+            >
+              {active ? <NavDevControl /> : <span />}
               <ControlStack />
             </motion.div>
           ) : null}
@@ -46,7 +57,7 @@ export function TouchLayout({ tablet, footer }: { tablet: boolean; footer: React
       </div>
 
       <AnimatePresence>
-        {showLower ? (
+        {showLower && !active ? (
           <motion.div
             key="fab"
             className="pointer-events-none absolute z-(--z-chrome)"
@@ -87,14 +98,19 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
         animate={{ x: mapLeft }}
         transition={{ duration: reduce ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        {/* Left bleed only: chip text lines up with the route pill below; the right edge fades under the mask. */}
-        <CategoryChips bleed={false} className={cn('pointer-events-auto -ml-4', open ? 'max-w-[calc(100vw-520px)]' : 'max-w-[calc(100vw-120px)]')} />
-        <AnimatePresence>
+        {/* Navigating: the maneuver banner sits top left in place of the chips. */}
+        <AnimatePresence mode="wait" initial={false}>
           {active ? (
-            <motion.div key="pill" className="w-full max-w-sm" {...fade}>
-              <ActiveRoutePill />
+            <motion.div key="banner" className="flex w-full max-w-sm flex-col items-start gap-3" {...fade}>
+              <ManeuverBanner />
+              <NavDevControl />
             </motion.div>
-          ) : null}
+          ) : (
+            <motion.div key="chips" className="w-full" {...fade}>
+              {/* Left bleed only; the right edge fades under the mask. */}
+              <CategoryChips bleed={false} className={cn('pointer-events-auto -ml-4', open ? 'max-w-[calc(100vw-520px)]' : 'max-w-[calc(100vw-120px)]')} />
+            </motion.div>
+          )}
         </AnimatePresence>
       </motion.div>
 

@@ -16,13 +16,16 @@ import type {
   CampusEvent,
   Id,
   LngLat,
+  Maneuver,
   Poi,
   Room,
   Route,
   RouteKind,
   RouteSegment,
+  RouteStep,
   SearchResult,
 } from '@/domain'
+import { angleDelta, bearingDeg, distanceM, measure } from '@/lib/nav/geo'
 import { formatHour as t } from '@/lib/time'
 
 export const PLANE = 1600
@@ -261,6 +264,45 @@ function lengthM(path: LngLat[]) {
   return m
 }
 
+/** Turn type from the signed change of direction at a vertex (positive is right). */
+export function maneuverFor(deltaDeg: number): Maneuver {
+  const a = Math.abs(deltaDeg)
+  const side = deltaDeg > 0 ? 'right' : 'left'
+  if (a < 20) return 'straight'
+  if (a < 45) return `slight-${side}` as const
+  if (a < 135) return side
+  if (a < 170) return `sharp-${side}` as const
+  return 'u-turn'
+}
+
+/**
+ * Turn-by-turn steps from a path and a street name per segment, the way a
+ * router would return them: depart, one step per real turn (or per name change
+ * on a straight), arrive. Zero-length segments are dropped first.
+ */
+export function stepsFromPath(path: LngLat[], legNames: (string | undefined)[]): RouteStep[] {
+  const pts: LngLat[] = []
+  const names: (string | undefined)[] = []
+  path.forEach((p, i) => {
+    const prev = pts[pts.length - 1]
+    if (prev && distanceM(prev, p) < 0.5) return
+    if (prev) names.push(legNames[i - 1])
+    pts.push(p)
+  })
+  if (pts.length < 2) return []
+  const cum = measure(pts)
+  const steps: RouteStep[] = [{ maneuver: 'depart', at: pts[0]!, offsetM: 0, distanceM: 0, name: names[0] }]
+  for (let i = 1; i < pts.length - 1; i++) {
+    const turn = maneuverFor(angleDelta(bearingDeg(pts[i - 1]!, pts[i]!), bearingDeg(pts[i]!, pts[i + 1]!)))
+    if (turn === 'straight' && names[i] === names[i - 1]) continue
+    steps.push({ maneuver: turn, at: pts[i]!, offsetM: Math.round(cum[i]!), distanceM: 0, name: names[i] })
+  }
+  const total = Math.round(cum[cum.length - 1]!)
+  steps.push({ maneuver: 'arrive', at: pts[pts.length - 1]!, offsetM: total, distanceM: 0 })
+  // Each leg runs to the next maneuver.
+  return steps.map((s, i) => ({ ...s, distanceM: i < steps.length - 1 ? steps[i + 1]!.offsetM - s.offsetM : 0 }))
+}
+
 function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
   const [tx, ty] = project(to)
   const [ox, oy] = project(ORIGIN)
@@ -270,6 +312,8 @@ function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
       ? [[ox, oy], [ox, ty + 16], [tx, ty + 16], [tx, ty]]
       : [[ox, oy], [ox + (tx - ox) * 0.45, oy - 40], [tx, ty + (oy - ty) * 0.35], [tx, ty]]
   const path = waypoints.map(([x, y]) => unproject(x, y))
+  // Sample street names, one per segment (illustrative, like the rest of this folder).
+  const legNames = kind === 'safest' ? ['Trousdale Pkwy', 'Childs Way', undefined] : ['Lot 6 path', 'Hahn Plaza', undefined]
   const scores = kind === 'safest' ? [0.12, 0.18, 0.09] : [0.31, 0.74, 0.42]
   const segments: RouteSegment[] = path.slice(1).map((p, i) => ({ path: [path[i]!, p], score: scores[i] ?? 0.2 }))
   const distanceM = Math.round(lengthM(path))
@@ -283,6 +327,7 @@ function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
     risk: kind === 'safest' ? { mean: 0.13, max: 0.18 } : { mean: 0.49, max: 0.74 },
     segments,
     warnings: kind === 'safest' ? [] : ['Crosses Lot 6, which is poorly lit after dark'],
+    steps: stepsFromPath(path, legNames),
   }
 }
 

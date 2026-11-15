@@ -5,24 +5,28 @@ import type { LocationFix } from '@/domain'
 
 export const LOCATION_PATH = '/api/v1/location'
 
-/** The body the backend expects. Also used by the mock handler to validate requests. */
-export const locationBody = z.object({
-  lat: z.number().min(-90).max(90),
-  lng: z.number().min(-180).max(180),
-  accuracy_m: z.number().nonnegative(),
-  heading_deg: z.number().optional(),
-  speed_mps: z.number().optional(),
-  ts: z.string(),
-})
+/**
+ * The body the backend expects. Also used by the mock handler to validate requests.
+ * Strict: direction stays on the device, so a body carrying `heading_deg` (or anything else) is rejected.
+ */
+export const locationBody = z
+  .object({
+    lat: z.number().min(-90).max(90),
+    lng: z.number().min(-180).max(180),
+    accuracy_m: z.number().nonnegative(),
+    speed_mps: z.number().optional(),
+    ts: z.string(),
+  })
+  .strict()
 export type LocationBody = z.infer<typeof locationBody>
 
+/** `fix.headingDeg` is never sent: heading is used on the device only. */
 export function toLocationBody(fix: LocationFix): LocationBody {
   const [lng, lat] = fix.lngLat
   return locationBody.parse({
     lat,
     lng,
     accuracy_m: fix.accuracyM,
-    ...(fix.headingDeg != null && Number.isFinite(fix.headingDeg) ? { heading_deg: fix.headingDeg } : {}),
     ...(fix.speedMps != null && Number.isFinite(fix.speedMps) ? { speed_mps: fix.speedMps } : {}),
     ts: fix.at,
   })

@@ -11,6 +11,7 @@ const views: Record<PanelView, ComponentType> = {
   search: lazy(() => import('@/features/search/SearchView')),
   place: lazy(() => import('@/features/building/PlaceView')),
   directions: lazy(() => import('@/features/route/DirectionsView')),
+  navigation: lazy(() => import('@/features/route/NavigationView')),
   events: lazy(() => import('@/features/events/EventsView')),
   layers: lazy(() => import('@/features/layers/LayersView')),
   safety: lazy(() => import('@/features/safety/SafetyView')),

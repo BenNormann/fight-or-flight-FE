@@ -33,6 +33,7 @@ export const handlers = [
 
   http.post(`*${LOCATION_PATH}`, async ({ request }) => {
     if (!readMockSession()) return unauthorized()
+    // Strict schema: a body that still carries direction (`heading_deg`) is rejected.
     const parsed = locationBody.safeParse(await request.json().catch(() => null))
     if (!parsed.success) return HttpResponse.json({ message: 'Invalid location' }, { status: 400 })
     return new HttpResponse(null, { status: 204 })

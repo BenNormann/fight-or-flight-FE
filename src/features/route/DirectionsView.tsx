@@ -14,8 +14,10 @@ import { useCapability } from '@/api/capabilities'
 import { buildings, demoRoutes, placeOf } from '@/demo'
 import type { Route } from '@/domain'
 import { cn } from '@/lib/cn'
+import { requestCompassPermission } from '@/lib/nav/compass'
 import { riskBands } from '@/lib/risk'
 import { formatTime } from '@/lib/time'
+import { distanceText, durationText } from '@/lib/units'
 import { useAppStore, type TravelMode } from '@/state/store'
 import {
   Button,
@@ -28,8 +30,6 @@ import {
   SegmentedControl,
   ViewHeader,
   arrivalTime,
-  formatDistance,
-  formatDuration,
   notify,
 } from '@/ui'
 import { LEAVE_OPTIONS, leaveIso, leaveOptionFor, rememberLeaveOption } from './leave'
@@ -62,9 +62,9 @@ function RouteCard({ route, selected, onSelect, leaveAt }: { route: Route; selec
         <RiskBadge score={route.risk.mean} />
       </span>
       <span className="flex flex-wrap items-baseline gap-x-2">
-        <span className="heading-5 font-mono">{formatDuration(route.durationS)}</span>
+        <span className="heading-5 font-mono">{durationText(route.durationS)}</span>
         <span className="body-6 text-muted-foreground">
-          {formatDistance(route.distanceM)} · arrive {formatTime(arrivalTime(route.durationS, leaveAt))}
+          {distanceText(route.distanceM)} · arrive {formatTime(arrivalTime(route.durationS, leaveAt))}
         </span>
       </span>
       {route.warnings.map((w) => (
@@ -246,8 +246,9 @@ export default function DirectionsView() {
               disabled={!chosen}
               onClick={() => {
                 if (!chosen) return
+                // iOS only grants the compass from a user gesture: ask here, before navigation starts. Never blocks starting.
+                void requestCompassPermission()
                 startRoute(chosen.id)
-                notify({ id: 'route', title: `${chosen.kind === 'safest' ? 'Safest' : 'Fastest'} route started`, description: `To ${to.name}` })
               }}
             >
               Start

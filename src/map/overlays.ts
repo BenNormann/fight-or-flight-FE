@@ -2,11 +2,12 @@
  * Pure builders for the demo overlays: GeoJSON for MapLibre sources, and the
  * pin list for HTML markers. No MapLibre import; colours come in resolved.
  */
-import type { Feature, FeatureCollection, LineString, Polygon } from 'geojson'
+import type { Feature, FeatureCollection, LineString, Point, Polygon } from 'geojson'
 // DEMO: sample places, routes and heat. Replace with adapters when the backend serves them.
 import { buildings, demoLayers, events, pois, type DemoLayerIcon } from '@/demo'
 import type { Id, LngLat, Poi, Route, Selection } from '@/domain'
 import { riskBand } from '@/lib/risk'
+import { aheadPieces, clip, splitAt } from './routeLine'
 
 /** Resolved risk colours, index = band level - 1. */
 export type RiskPalette = readonly [string, string, string, string, string]
@@ -29,19 +30,46 @@ export function shownRoutes(routes: Route[], opts: { activeRouteId: Id | null; d
   return { chosen, others: routes.filter((r) => r !== chosen) }
 }
 
-type RouteProps = { role: 'alt' | 'casing' | 'segment'; color?: string; label?: string }
+type RouteProps = { role: 'alt' | 'done' | 'casing' | 'segment'; color?: string; label?: string }
 
-export function routeFeatures({ chosen, others }: ShownRoutes, palette: RiskPalette): FeatureCollection<LineString, RouteProps> {
+/**
+ * Route lines. With `progressM` (navigating), the chosen route splits there:
+ * the travelled part is one dimmed `done` line, the remaining part keeps the
+ * casing and the risk-coloured segments.
+ */
+export function routeFeatures({ chosen, others }: ShownRoutes, palette: RiskPalette, progressM: number | null = null): FeatureCollection<LineString, RouteProps> {
   const line = (path: LngLat[], props: RouteProps): Feature<LineString, RouteProps> => ({
     type: 'Feature',
     properties: props,
     geometry: { type: 'LineString', coordinates: path },
   })
+  const p = progressM ?? 0
+  const { done, ahead } = chosen ? splitAt(chosen.path, p) : { done: [], ahead: [] }
+  const segments = chosen ? (p > 0 ? aheadPieces(chosen.segments, p) : chosen.segments) : []
   const features = [
     ...others.map((r) => line(r.path, { role: 'alt' })),
-    ...(chosen ? [line(chosen.path, { role: 'casing' })] : []),
-    ...(chosen?.segments ?? []).map((s) => line(s.path, { role: 'segment', color: riskFill(s.score, palette), label: riskBand(s.score).label })),
+    ...(done.length >= 2 ? [line(done, { role: 'done' })] : []),
+    ...(ahead.length >= 2 ? [line(ahead, { role: 'casing' })] : []),
+    ...segments.map((s) => line(s.path, { role: 'segment', color: riskFill(s.score, palette), label: riskBand(s.score).label })),
   ]
+  return { type: 'FeatureCollection', features }
+}
+
+type NavProps = { role: 'ahead' | 'step' | 'destination'; maneuver?: string }
+
+/**
+ * Navigation furniture on the started route: the remaining line (carries the
+ * direction arrows), dots at the maneuvers still ahead, and the destination.
+ */
+export function navFeatures(route: Route, progressM: number): FeatureCollection<LineString | Point, NavProps> {
+  const ahead = clip(route.path, progressM, Infinity)
+  const end = route.path.at(-1)
+  const features: Feature<LineString | Point, NavProps>[] = []
+  if (ahead.length >= 2) features.push({ type: 'Feature', properties: { role: 'ahead' }, geometry: { type: 'LineString', coordinates: ahead } })
+  for (const s of route.steps)
+    if (s.offsetM > progressM && s.maneuver !== 'depart' && s.maneuver !== 'arrive' && s.maneuver !== 'straight')
+      features.push({ type: 'Feature', properties: { role: 'step', maneuver: s.maneuver }, geometry: { type: 'Point', coordinates: s.at } })
+  if (end) features.push({ type: 'Feature', properties: { role: 'destination' }, geometry: { type: 'Point', coordinates: end } })
   return { type: 'FeatureCollection', features }
 }
 

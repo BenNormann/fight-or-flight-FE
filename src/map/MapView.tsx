@@ -4,24 +4,25 @@ import type { ExpressionSpecification, GeoJSONSource, Map as MlMap, MapMouseEven
 // MapLibre 6 spawns a module worker next to its own file, which Vite's dep prebundling does not copy.
 // Bundle the worker ourselves and point MapLibre at it.
 import maplibreWorkerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url'
-import { motion, useReducedMotion } from 'motion/react'
+import { animate, motion, useReducedMotion } from 'motion/react'
 import { Protocol } from 'pmtiles'
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppConfig } from '@/api/queries'
 // DEMO: sample places, routes and heat at real coordinates. Replace with adapters when the backend serves them.
 import { CAMPUS_CENTER, ORIGIN, buildings, demoLayerDefaults, demoRoutes, SAFETY_HEAT_LAYER } from '@/demo'
 import { demoRiskCells } from '@/demo/heat'
-import type { AppConfig } from '@/domain'
+import type { AppConfig, LngLat, MapMode } from '@/domain'
 import { env } from '@/lib/env'
 import { useAppStore } from '@/state/store'
 import { Keystone, PlaceIcon, useBreakpoint, useTheme, useViewportHeight } from '@/ui'
 import { DEV_FALLBACK_STYLE, buildMapStyle, type MapTheme } from './basemap'
 import { backendBuildingsAvailable, backendBuildingsUrl, basemapBuildings, pmtilesBuildings, type BuildingSource } from './buildings'
 import { LOCATE_ZOOM, MAX_PITCH, MAX_ZOOM, MIN_ZOOM, START_ZOOM, bboxOf, boundsAround, cameraPresets } from './camera'
+import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { publishBearing, registerMapController } from './controller'
 import { chromeInsets } from './insets'
-import { fitPoints, heatFeatures, pinSpecs, placeFeatures, routeFeatures, shownRoutes, type PinSpec, type RiskPalette } from './overlays'
+import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, shownRoutes, type PinSpec, type RiskPalette } from './overlays'
 
 /**
  * The ONLY map instance in the app: MapLibre GL over a basemap from config
@@ -52,6 +53,23 @@ function setupMapLibre() {
 /** Token colours resolved for the current theme (MapLibre cannot read CSS variables). */
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
 const riskPalette = (): RiskPalette => [1, 2, 3, 4, 5].map((i) => cssVar(`--risk-${i}`)) as unknown as RiskPalette
+/** Same rule as the "you are here" dot: cardinal by day, gold at night. */
+const characterColors = (theme: MapTheme): CharacterColors =>
+  theme === 'dark' ? { body: cssVar('--gold'), accent: cssVar('--brand') } : { body: cssVar('--brand'), accent: cssVar('--gold') }
+
+/** Follow camera: north-up in 2D and Iso (their fixed bearing), heading-up in 3D. */
+const followBearing = (mode: MapMode, headingDeg: number) => (mode === '3d' ? headingDeg : cameraPresets[mode].bearing)
+
+/** Longest glide between two fixes; a longer gap jumps. */
+const NAV_GLIDE_MAX_MS = 1500
+const NAV_JUMP_AFTER_MS = 3000
+
+/** Where the traveller is drawn: eased between fixes. */
+interface TravellerPose {
+  at: LngLat
+  headingDeg: number
+  progressM: number
+}
 
 const onResize = (cb: () => void) => {
   window.addEventListener('resize', cb)
@@ -78,6 +96,9 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const travelMode = useAppStore((s) => s.travelMode)
   const routeKind = useAppStore((s) => s.routeKind)
   const activeRouteId = useAppStore((s) => s.activeRouteId)
+  const nav = useAppStore((s) => s.nav)
+  const navFollowing = useAppStore((s) => s.navFollowing)
+  const navCharacter = useAppStore((s) => s.navCharacter)
   const breakpoint = useBreakpoint()
   const viewportH = useViewportHeight()
   const viewportW = useViewportWidth()
@@ -128,6 +149,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       setStyleGen((g) => g + 1)
     })
     m.on('rotate', () => publishBearing(m.getBearing()))
+    // Dev only: lets local gesture checks read the camera.
+    if (import.meta.env.DEV) (window as unknown as { __fofMap?: MlMap }).__fofMap = m
     setMap(m)
 
     const url = backendBuildingsUrl()
@@ -165,13 +188,69 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     [destination, travelMode, activeRouteId, view, routeKind],
   )
   const ready = !!map && styleGen > 0 && buildingSrc !== 'pending'
+  /** The started route, while it is among the current routes. */
+  const navRoute = activeRouteId ? routes.chosen : null
+  /** Navigating with live fixes: the follow camera owns the view, not the route fit. */
+  const navLive = !!navRoute && !!nav
+
+  // ── Route line, nav furniture and traveller ───────────────────────────────
+  /** The traveller as drawn right now (eased between fixes). */
+  const traveller = useRef<TravellerPose | null>(null)
+  /** Redraws everything that depends on the traveller. Rebuilt after each render so it reads current props. */
+  const drawNav = useRef<() => void>(() => {})
+  useEffect(() => {
+    drawNav.current = () => {
+      if (!ready || swapping.current) return
+      const t = traveller.current
+      const progress = navRoute ? (t?.progressM ?? 0) : null
+      setData(map, 'fof-routes', routeFeatures(routes, riskPalette(), progress))
+      setData(map, 'fof-nav', navRoute ? navFeatures(navRoute, progress ?? 0) : EMPTY)
+      if (!navRoute || !t) {
+        setData(map, 'fof-nav-char', EMPTY)
+        return
+      }
+      const colors = characterColors(theme)
+      const body = characterFeatures(characterFor(navCharacter), t, { zoom: map.getZoom(), mode: mapMode }, colors)
+      // Halo under the character: flat, drawn above the buildings, so the position shows even when a wall hides the 3D arrow.
+      const halo = { type: 'Feature' as const, properties: { role: 'halo', color: colors.body }, geometry: { type: 'Point' as const, coordinates: t.at } }
+      setData(map, 'fof-nav-char', { type: 'FeatureCollection', features: [halo, ...body.features] })
+    }
+  })
 
   useEffect(() => {
     if (!ready || swapping.current) return
-    setData(map, 'fof-routes', routeFeatures(routes, riskPalette()))
-    map.setPaintProperty('fof-route-casing', 'line-color', cssVar('--background'))
-    map.setPaintProperty('fof-route-alt', 'line-color', cssVar('--muted-foreground'))
-  }, [ready, map, styleGen, routes, theme])
+    drawNav.current()
+    const bg = cssVar('--background')
+    const muted = cssVar('--muted-foreground')
+    map.setPaintProperty('fof-route-casing', 'line-color', bg)
+    map.setPaintProperty('fof-route-alt', 'line-color', muted)
+    map.setPaintProperty('fof-route-done-casing', 'line-color', bg)
+    map.setPaintProperty('fof-route-done', 'line-color', muted)
+    map.setPaintProperty('fof-nav-step', 'circle-color', bg)
+    map.setPaintProperty('fof-nav-step', 'circle-stroke-color', cssVar('--foreground'))
+    map.setPaintProperty('fof-nav-dest', 'circle-color', cssVar('--brand'))
+    map.setPaintProperty('fof-nav-dest', 'circle-stroke-color', bg)
+    map.setPaintProperty('fof-nav-dest-dot', 'circle-color', bg)
+    map.setPaintProperty('fof-nav-char-casing', 'line-color', bg)
+  }, [ready, map, styleGen, routes, theme, mapMode, navCharacter, navRoute])
+
+  // The character keeps a constant on-screen size: rescale it with the zoom.
+  useEffect(() => {
+    if (!map) return
+    let frame = 0
+    const onZoom = () => {
+      if (!traveller.current || frame) return
+      frame = requestAnimationFrame(() => {
+        frame = 0
+        drawNav.current()
+      })
+    }
+    map.on('zoom', onZoom)
+    return () => {
+      cancelAnimationFrame(frame)
+      map.off('zoom', onZoom)
+    }
+  }, [map])
 
   const heat = useMemo(() => demoRiskCells(), [])
   useEffect(() => {
@@ -201,7 +280,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const fit = useMemo(() => fitPoints(routes, selection), [routes, selection])
   const framed = useRef(false)
   useEffect(() => {
-    if (!map) return
+    if (!map || navLive) return
     const w = map.getContainer().clientWidth
     const h = map.getContainer().clientHeight
     // Sheet at full: nothing left to frame into. Leave the camera alone.
@@ -228,7 +307,145 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     if (!cam) return
     // The fit already accounts for padding; keep only the chrome insets as the map's padding.
     map.easeTo({ ...cam, padding: insets, pitch: pose.pitch, duration: target.kind === 'campus' ? 0 : ms })
-  }, [map, fit, insets, ms, mapMode])
+  }, [map, fit, insets, ms, mapMode, navLive])
+
+  // ── Follow camera ────────────────────────────────────────────────────────
+  const follow = useRef({ on: navFollowing && navLive, insets, mapMode })
+  useEffect(() => {
+    follow.current = { on: navFollowing && navLive, insets, mapMode }
+  }, [navFollowing, navLive, insets, mapMode])
+
+  /**
+   * The user tilted or rotated while following: keep following the position,
+   * but leave bearing and pitch where they put them. Cleared on resume or mode change.
+   */
+  const userAim = useRef(false)
+  /** Set while the camera's latest move is our own jump (its moveend is ignored). */
+  const ownJump = useRef(false)
+  /** Keep the camera locked on the traveller, unless a gesture or an ease owns it. Refs only, so stable. */
+  const lockOn = useCallback(
+    (t: { at: LngLat; headingDeg: number }) => {
+      const f = follow.current
+      if (!map || !f.on || map.isMoving()) return
+      ownJump.current = true
+      map.jumpTo({ center: t.at, padding: f.insets, ...(userAim.current ? {} : { bearing: followBearing(f.mapMode, t.headingDeg) }) })
+    },
+    [map],
+  )
+  /** Ease the camera onto the traveller (start, resume, chrome or mode change). */
+  const easeToTraveller = useRef<(duration: number) => void>(() => {})
+  useEffect(() => {
+    easeToTraveller.current = (duration) => {
+      // Aim at the latest fix: the drawn traveller may still be gliding from the previous one.
+      const n = useAppStore.getState().nav
+      const t = n ? { at: n.position, headingDeg: n.headingDeg } : traveller.current
+      if (!ready || swapping.current || !t) return
+      const aim = userAim.current ? {} : { bearing: followBearing(mapMode, t.headingDeg), pitch: cameraPresets[mapMode].pitch }
+      map.easeTo({ center: t.at, zoom: Math.max(map.getZoom(), LOCATE_ZOOM), ...aim, padding: insets, duration })
+    }
+  })
+
+  useEffect(() => {
+    userAim.current = false
+  }, [navFollowing, mapMode])
+
+  useEffect(() => {
+    if (navFollowing && navLive) easeToTraveller.current(ms)
+  }, [ready, map, navFollowing, navLive, insets, mapMode, ms])
+
+  // Gestures. A pan hands the camera back to the user (follow off); a tilt or
+  // rotate only releases bearing and pitch. After any camera movement ends
+  // (our ease, a pinch zoom), snap back onto the traveller if still following.
+  useEffect(() => {
+    if (!map) return
+    const navOn = () => {
+      const s = useAppStore.getState()
+      return !!s.activeRouteId && s.navFollowing
+    }
+    // A pinch also pans around its centre; only a one-finger (or mouse) drag counts as leaving.
+    const onPan = (e: { originalEvent?: unknown }) => {
+      const ev = e.originalEvent
+      const multiTouch = typeof TouchEvent !== 'undefined' && ev instanceof TouchEvent && ev.touches.length > 1
+      if (ev && !multiTouch && navOn()) useAppStore.getState().setNavFollowing(false)
+    }
+    const onAim = (e: { originalEvent?: unknown }) => {
+      if (e.originalEvent && navOn()) userAim.current = true
+    }
+    const onMoveEnd = () => {
+      // The moveend of our own jump must not snap again, or we would snap forever.
+      if (ownJump.current) {
+        ownJump.current = false
+        return
+      }
+      const t = traveller.current
+      if (t) lockOn(t)
+    }
+    // Two-finger tilt and twist must not fight: whichever starts first owns the gesture.
+    const isTouch = (e: { originalEvent?: unknown }) => typeof TouchEvent !== 'undefined' && e.originalEvent instanceof TouchEvent
+    const rotates = () => cameraPresets[live.current.mapMode].rotate
+    const onPitchStart = (e: { originalEvent?: unknown }) => {
+      if (isTouch(e)) map.touchZoomRotate.disableRotation()
+    }
+    const onPitchEnd = () => {
+      if (rotates()) map.touchZoomRotate.enableRotation()
+    }
+    const onRotateStart = (e: { originalEvent?: unknown }) => {
+      if (isTouch(e)) map.touchPitch.disable()
+    }
+    const onRotateEnd = () => {
+      if (rotates()) map.touchPitch.enable()
+    }
+    const handlers = [
+      ['dragstart', onPan],
+      ['rotatestart', onAim],
+      ['pitchstart', onAim],
+      ['moveend', onMoveEnd],
+      ['pitchstart', onPitchStart],
+      ['pitchend', onPitchEnd],
+      ['rotatestart', onRotateStart],
+      ['rotateend', onRotateEnd],
+    ] as const
+    for (const [type, fn] of handlers) map.on(type, fn)
+    return () => {
+      for (const [type, fn] of handlers) map.off(type, fn)
+    }
+  }, [map, lockOn])
+
+  // Each fix: glide the traveller (and the line split) from where it is drawn to the new fix.
+  const lastFixAt = useRef(0)
+  useEffect(() => {
+    if (!navRoute || !nav) {
+      traveller.current = null
+      lastFixAt.current = 0
+      drawNav.current()
+      return
+    }
+    const to: TravellerPose = { at: nav.position, headingDeg: nav.headingDeg, progressM: nav.progressM }
+    const from = traveller.current
+    const now = performance.now()
+    const gap = now - lastFixAt.current
+    lastFixAt.current = now
+    const step = (pose: TravellerPose) => {
+      traveller.current = pose
+      drawNav.current()
+      lockOn(pose)
+    }
+    if (!from || reduce || gap > NAV_JUMP_AFTER_MS) {
+      step(to)
+      return
+    }
+    const glide = animate(0, 1, {
+      duration: Math.min(gap, NAV_GLIDE_MAX_MS) / 1000,
+      ease: 'linear',
+      onUpdate: (k) =>
+        step({
+          at: lerpLngLat(from.at, to.at, k),
+          headingDeg: lerpAngle(from.headingDeg, to.headingDeg, k),
+          progressM: from.progressM + (to.progressM - from.progressM) * k,
+        }),
+    })
+    return () => glide.stop()
+  }, [nav, navRoute, reduce, lockOn])
 
   // ── Commands from chrome ─────────────────────────────────────────────────
   useEffect(() => {
@@ -239,6 +456,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       resetNorth: () => {
         const p = cameraPresets[live.current.mapMode]
         map.easeTo({ bearing: p.rotate ? 0 : p.bearing, pitch: p.pitch, duration: live.current.reduce ? 0 : 500 })
+      },
+      followTraveller: () => {
+        userAim.current = false
+        easeToTraveller.current(live.current.reduce ? 0 : CAMERA_MS)
       },
     })
   }, [map])
@@ -258,8 +479,9 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   }, [ready, map, select])
 
   const pins = useMemo(
-    () => pinSpecs(ORIGIN, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false),
-    [selectedId, overrides],
+    // While navigating, the traveller replaces the "you are here" dot.
+    () => pinSpecs(ORIGIN, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => !navLive || p.kind !== 'origin'),
+    [selectedId, overrides, navLive],
   )
 
   return (
@@ -295,7 +517,10 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
   const add = (layer: maplibregl.AddLayerObject) => {
     if (!map.getLayer(layer.id)) map.addLayer(layer, beforeLabels)
   }
-  for (const id of ['fof-heat', 'fof-places', 'fof-routes']) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
+  for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char']) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
+  const arrow = arrowImage(cssVar('--background'))
+  if (map.hasImage(NAV_ARROW)) map.updateImage(NAV_ARROW, arrow)
+  else map.addImage(NAV_ARROW, arrow, { pixelRatio: 2 })
 
   add({ id: 'fof-heat', type: 'fill', source: 'fof-heat', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.32 } })
 
@@ -320,6 +545,10 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
 
   const round = { 'line-join': 'round', 'line-cap': 'round' } as const
   add({ id: 'fof-route-alt', type: 'line', source: 'fof-routes', layout: round, filter: ['==', ['get', 'role'], 'alt'], paint: { 'line-width': 5, 'line-opacity': 0.55 } })
+  // Travelled part while navigating: same casing, dimmed muted line.
+  const done = ['==', ['get', 'role'], 'done'] as ExpressionSpecification
+  add({ id: 'fof-route-done-casing', type: 'line', source: 'fof-routes', layout: round, filter: done, paint: { 'line-width': 10, 'line-opacity': 0.7 } })
+  add({ id: 'fof-route-done', type: 'line', source: 'fof-routes', layout: round, filter: done, paint: { 'line-width': 5, 'line-opacity': 0.45 } })
   add({ id: 'fof-route-casing', type: 'line', source: 'fof-routes', layout: round, filter: ['==', ['get', 'role'], 'casing'], paint: { 'line-width': 12 } })
   add({
     id: 'fof-route',
@@ -329,6 +558,102 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
     filter: ['==', ['get', 'role'], 'segment'],
     paint: { 'line-width': 7, 'line-color': ['get', 'color'] },
   })
+
+  // Direction arrows along the remaining line. Labels stay above the line; these sit just under them.
+  add({
+    id: 'fof-nav-arrows',
+    type: 'symbol',
+    source: 'fof-nav',
+    filter: ['==', ['get', 'role'], 'ahead'],
+    layout: {
+      'symbol-placement': 'line',
+      'symbol-spacing': 56,
+      'icon-image': NAV_ARROW,
+      'icon-rotation-alignment': 'map',
+      'icon-pitch-alignment': 'map',
+      'icon-keep-upright': false,
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+    },
+    paint: { 'icon-opacity': 0.9 },
+  })
+
+  // Above the labels: maneuver dots, destination, traveller.
+  const top = (layer: maplibregl.AddLayerObject) => {
+    if (!map.getLayer(layer.id)) map.addLayer(layer)
+  }
+  const flatMap = { 'circle-pitch-alignment': 'map', 'circle-pitch-scale': 'viewport' } as const
+  top({
+    id: 'fof-nav-step',
+    type: 'circle',
+    source: 'fof-nav',
+    filter: ['==', ['get', 'role'], 'step'],
+    paint: { 'circle-radius': 4.5, 'circle-stroke-width': 2.5, ...flatMap },
+  })
+  const dest = ['==', ['get', 'role'], 'destination'] as ExpressionSpecification
+  top({ id: 'fof-nav-dest', type: 'circle', source: 'fof-nav', filter: dest, paint: { 'circle-radius': 10, 'circle-stroke-width': 3, ...flatMap } })
+  top({ id: 'fof-nav-dest-dot', type: 'circle', source: 'fof-nav', filter: dest, paint: { 'circle-radius': 3.5, ...flatMap } })
+
+  // Traveller: halo, then flat in 2D (with a casing), extruded and lit in Iso and 3D.
+  top({
+    id: 'fof-nav-halo',
+    type: 'circle',
+    source: 'fof-nav-char',
+    filter: ['==', ['get', 'role'], 'halo'],
+    paint: {
+      'circle-radius': 22,
+      'circle-color': ['get', 'color'],
+      'circle-opacity': 0.16,
+      'circle-stroke-width': 1.5,
+      'circle-stroke-color': ['get', 'color'],
+      'circle-stroke-opacity': 0.5,
+      ...flatMap,
+    },
+  })
+  const flat = ['==', ['get', 'solid'], false] as ExpressionSpecification
+  top({
+    id: 'fof-nav-char-casing',
+    type: 'line',
+    source: 'fof-nav-char',
+    filter: ['all', flat, ['==', ['get', 'outline'], true]],
+    layout: { 'line-join': 'round' },
+    paint: { 'line-width': 3 },
+  })
+  top({ id: 'fof-nav-char-flat', type: 'fill', source: 'fof-nav-char', filter: flat, paint: { 'fill-color': ['get', 'color'] } })
+  top({
+    id: 'fof-nav-char-solid',
+    type: 'fill-extrusion',
+    source: 'fof-nav-char',
+    filter: ['==', ['get', 'solid'], true],
+    paint: {
+      'fill-extrusion-color': ['get', 'color'],
+      'fill-extrusion-height': ['get', 'height'],
+      'fill-extrusion-base': ['get', 'base'],
+      'fill-extrusion-opacity': 1,
+      'fill-extrusion-vertical-gradient': true,
+    },
+  })
+}
+
+const NAV_ARROW = 'fof-nav-arrow'
+
+/** A small chevron pointing along +x (the line direction), drawn at 2x. */
+function arrowImage(color: string): ImageData {
+  const s = 2
+  const c = document.createElement('canvas')
+  c.width = 12 * s
+  c.height = 12 * s
+  const g = c.getContext('2d')!
+  g.strokeStyle = color
+  g.lineWidth = 2.25 * s
+  g.lineCap = 'round'
+  g.lineJoin = 'round'
+  g.beginPath()
+  g.moveTo(4 * s, 3 * s)
+  g.lineTo(8 * s, 6 * s)
+  g.lineTo(4 * s, 9 * s)
+  g.stroke()
+  return g.getImageData(0, 0, c.width, c.height)
 }
 
 /** Camera preset, interaction handlers, and building height (flat in 2D, extruded in Iso and 3D). */

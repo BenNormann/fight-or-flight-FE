@@ -40,8 +40,7 @@ export { MenuTriggerStub } from './MenuTriggerStub'
 export { SearchBar, type SearchBarProps } from './SearchBar'
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl'
 export { SidePanel } from './SidePanel'
-export { StatusPill } from './StatusPill'
 export { THEME_MODES, nextThemeMode, resolveTheme, useTheme, useThemeController, type ThemeMode } from './theme'
-export { arrivalTime, dayLabel, formatDistance, formatDuration } from './format'
-/** Clock times: `formatTime` / `formatHour` from `@/lib/time`. */
+export { arrivalTime, dayLabel } from './format'
+/** Clock times: `formatTime` / `formatHour` from `@/lib/time`. Distances and durations: `@/lib/units`. */
 export { CategoryIcon, PlaceIcon } from './icons'

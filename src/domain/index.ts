@@ -149,6 +149,33 @@ export interface RouteSegment {
   score: number
 }
 
+export const MANEUVERS = [
+  'depart',
+  'straight',
+  'slight-left',
+  'left',
+  'sharp-left',
+  'slight-right',
+  'right',
+  'sharp-right',
+  'u-turn',
+  'arrive',
+] as const
+export type Maneuver = (typeof MANEUVERS)[number]
+
+/** One turn-by-turn instruction. Comes with the route (backend, or demo data); the FE only renders it. */
+export interface RouteStep {
+  maneuver: Maneuver
+  /** Where the maneuver happens. */
+  at: LngLat
+  /** Distance from the start of the route to `at`, along the path. */
+  offsetM: number
+  /** Length of the leg that follows this maneuver. */
+  distanceM: number
+  /** Street or path the leg follows, when known. */
+  name?: string
+}
+
 export interface Route {
   id: Id
   kind: RouteKind
@@ -158,7 +185,29 @@ export interface Route {
   risk: { mean: number; max: number }
   segments: RouteSegment[]
   warnings: string[]
+  /** Turn-by-turn steps in travel order. Empty when the source gives none: then no turn banner. */
+  steps: RouteStep[]
 }
+
+/** Live progress along a started route. One writer (the navigation driver), many readers. */
+export interface NavProgress {
+  /** Position snapped to the route. */
+  position: LngLat
+  /** Direction of travel, degrees clockwise from north. */
+  headingDeg: number
+  /** Distance travelled along the route. */
+  progressM: number
+  /** Index into `Route.steps` of the NEXT maneuver. */
+  stepIndex: number
+  /** Distance to that maneuver. */
+  toStepM: number
+  remainingM: number
+  remainingS: number
+  arrived: boolean
+}
+
+/** Marker drawn at the traveller's position. More characters come later; ids are open-ended. */
+export type NavCharacterId = 'chevron' | (string & {})
 
 export interface RouteRequest {
   from: LngLat

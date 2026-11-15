@@ -56,6 +56,31 @@ describe('store navigation', () => {
     expect(useAppStore.getState().activeRouteId).toBeNull()
   })
 
+  it('starting a route opens the trip; closing other views returns to it; ending resets navigation', () => {
+    const nav = { position: [0, 0] as [number, number], headingDeg: 0, progressM: 5, stepIndex: 1, toStepM: 10, remainingM: 90, remainingS: 60, arrived: false }
+    useAppStore.getState().directionsTo('b2')
+    useAppStore.getState().startRoute('r-safe')
+    expect(useAppStore.getState()).toMatchObject({ view: 'navigation', navFollowing: true, nav: null })
+    useAppStore.getState().setNav(nav)
+    useAppStore.getState().setNavFollowing(false)
+    useAppStore.getState().select({ kind: 'building', id: 'b1' })
+    useAppStore.getState().back()
+    expect(useAppStore.getState().view).toBe('navigation')
+    useAppStore.getState().openView('layers')
+    useAppStore.getState().openView('explore')
+    expect(useAppStore.getState().view).toBe('navigation')
+    useAppStore.getState().endRoute()
+    expect(useAppStore.getState()).toMatchObject({ activeRouteId: null, nav: null, navFollowing: true, view: 'explore' })
+  })
+
+  it('changing travel mode mid trip clears progress too', () => {
+    useAppStore.getState().directionsTo('b2')
+    useAppStore.getState().startRoute('r-safe')
+    useAppStore.getState().setNav({ position: [0, 0], headingDeg: 0, progressM: 0, stepIndex: 0, toStepM: 0, remainingM: 0, remainingS: 0, arrived: false })
+    useAppStore.getState().setTravelMode('bike')
+    expect(useAppStore.getState()).toMatchObject({ activeRouteId: null, nav: null })
+  })
+
   it('opening explore clears the selection and lowers the sheet', () => {
     useAppStore.getState().select({ kind: 'building', id: 'b1' })
     useAppStore.getState().openView('explore')

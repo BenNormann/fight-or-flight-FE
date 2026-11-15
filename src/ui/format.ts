@@ -1,18 +1,4 @@
-/** Display formatting for numeric UI. Pure; shown in Geist Mono via `font-mono`. */
-
-export function formatDuration(seconds: number): string {
-  const min = Math.max(1, Math.round(seconds / 60))
-  if (min < 60) return `${min} min`
-  const h = Math.floor(min / 60)
-  const m = min % 60
-  return m ? `${h} h ${m} min` : `${h} h`
-}
-
-/** Metric under 1 km, then km with one decimal. */
-export function formatDistance(metres: number): string {
-  if (metres < 1000) return `${Math.round(metres / 10) * 10} m`
-  return `${(metres / 1000).toFixed(1)} km`
-}
+/** Display formatting for dates. Pure. Distances and durations (US units) live in `@/lib/units`. */
 
 /** "Tonight", "Tomorrow", or a weekday, relative to `now`. */
 export function dayLabel(iso: string, now = new Date(), locale?: string): string {
