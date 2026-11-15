@@ -18,6 +18,8 @@ export interface LocationState {
   fix: LocationFix | null
   /** A request is waiting for the browser prompt or the first fix. */
   asking: boolean
+  /** The browser's own words for the last failure, e.g. "User denied Geolocation". Shown so a refusal can be traced. */
+  reason?: string
 }
 
 let state: LocationState = { status: 'unknown', fix: null, asking: false }
@@ -58,7 +60,7 @@ function watch(g: Geolocation, highAccuracy = true) {
     (p) => {
       refused = false
       const fix = toLocationFix(p)
-      set({ status: 'granted', fix, asking: false })
+      set({ status: 'granted', fix, asking: false, reason: undefined })
       settle(fix)
     },
     (e) => {
@@ -66,13 +68,13 @@ function watch(g: Geolocation, highAccuracy = true) {
       watchId = null
       if (e.code === e.PERMISSION_DENIED) {
         refused = true
-        set({ status: 'denied', fix: null, asking: false })
+        set({ status: 'denied', fix: null, asking: false, reason: e.message || 'permission denied' })
         settle(null)
       } else if (highAccuracy && !state.fix) {
         // No GPS fix in time (indoors, or precise location off on iOS): a coarse position beats none.
         watch(g, false)
       } else {
-        set({ asking: false })
+        set({ asking: false, reason: e.message || (e.code === e.TIMEOUT ? 'timed out' : 'position unavailable') })
         settle(null)
       }
     },

@@ -486,10 +486,11 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
         // No position yet: this is the moment to ask (the browser prompt needs a user gesture on iOS).
         void requestLocation().then((fix) => {
           if (live.current.me) return go(live.current.me)
-          const { status } = getLocation()
+          const { status, reason } = getLocation()
+          const why = reason ? ` (Browser said: ${reason})` : ''
           if (fix) notify({ id: 'location', title: 'You are outside the map area', description: 'Odyssey covers USC and about 10 miles around it.' })
-          else if (status === 'denied') notify({ id: 'location', title: 'Location is blocked', description: LOCATION_DENIED_HELP })
-          else notify({ id: 'location', title: 'Could not find your location', description: 'Check that location is on for this device, then try again.' })
+          else if (status === 'denied') notify({ id: 'location', title: 'Location is blocked', description: LOCATION_DENIED_HELP + why })
+          else notify({ id: 'location', title: 'Could not find your location', description: `Check that location is on for this device, then try again.${why}` })
         })
       },
       zoomBy: (d) => map.zoomTo(map.getZoom() + d, { duration: live.current.reduce ? 0 : 300 }),
