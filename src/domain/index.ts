@@ -24,6 +24,10 @@ export const CAPABILITY_KEYS = [
   'routing',
   'events',
   'models3d',
+  /** Sign-in (session, `/login`). Off: no account button, directions are not gated. */
+  'auth',
+  /** Posting the signed-in user's location. */
+  'liveLocation',
 ] as const
 export type CapabilityKey = (typeof CAPABILITY_KEYS)[number]
 export type Capabilities = Record<CapabilityKey, boolean>
@@ -53,6 +57,24 @@ export interface AppConfig {
   /** H3 resolutions the backend serves risk at, coarse → fine. */
   riskResolutions: number[]
   dataUpdatedAt?: IsoTime
+}
+
+// ── Account & live location ──────────────────────────────────────────────────
+
+export interface User {
+  id: Id
+  email: string
+  name?: string
+  picture?: string
+}
+
+/** One device position the signed-in user shares. */
+export interface LocationFix {
+  lngLat: LngLat
+  accuracyM: number
+  headingDeg?: number
+  speedMps?: number
+  at: IsoTime
 }
 
 // ── Campus entities ──────────────────────────────────────────────────────────

@@ -14,7 +14,9 @@
     "risk": true,
     "routing": true,
     "events": true,
-    "models3d": false
+    "models3d": false,
+    "auth": true,
+    "liveLocation": true
   },
   "riskResolutions": [8, 9, 10],
   "dataUpdatedAt": "2026-11-14T08:00:00Z"

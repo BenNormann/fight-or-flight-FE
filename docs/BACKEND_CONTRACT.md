@@ -54,6 +54,29 @@ Buildings: 969,395 LA County footprints (LARIAC 2020) within ~16 km (10 miles) o
 4. Will POIs (blue lights) and events be served?
 5. Can response schemas be declared so `/api/openapi.json` documents the bodies?
 
+## Auth and live location (PROPOSED by the FE on 2026-11-14, not in the backend yet)
+
+The backend has no auth today. The FE is built against this proposal behind one adapter each (`src/api/adapters/auth.ts`, `location.ts`), so the paths and shapes can change in one place. Mock mode simulates all of it.
+
+| Method & path | Behaviour |
+|---|---|
+| `GET /api/v1/auth/login?next=<url>` | Full-page redirect to the OAuth provider. The FE navigates the browser here; it never sees provider credentials |
+| `GET /api/v1/auth/callback` | Provider returns here. Backend creates the session (httpOnly cookie) and redirects to `next` |
+| `GET /api/v1/auth/me` | `200 {id, email, name?, picture?}` when signed in, `401` otherwise |
+| `POST /api/v1/auth/logout` | `204`, clears the session |
+| `POST /api/v1/location` (signed in) | Body `{lat, lng, accuracy_m, heading_deg?, speed_mps?, ts}` → `204`. `401` when signed out |
+
+Decided by the product owner (2026-11-14):
+- Sign-in is limited to `@usc.edu` accounts. The backend must enforce this; on rejection it should redirect to the FE's `/login?error=domain`.
+- The session is an httpOnly cookie. So CORS must name the FE origin and allow credentials (today it is `*`, which browsers reject with credentials), and with the FE on another origin the cookie needs `SameSite=None; Secure`.
+- The FE posts location every 10 seconds while active (may drop to 5), only while signed in and opted in.
+
+Still open for the backend team:
+1. Which OAuth provider (Google with a hosted-domain restriction? USC SSO?).
+2. `next` must be validated against an allow-list (open-redirect risk).
+3. Location retention, and who can read it.
+4. Which endpoints will require sign-in (routing only, or more)?
+
 ## FE status
 
 - No adapter matches this API yet. The existing `config` adapter, fixture and mock handler follow the FE's earlier proposal (`/api/config`) and are obsolete; they stay only so the app boots in mock mode.

@@ -88,6 +88,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const [map, setMap] = useState<MlMap | null>(null)
   /** Bumps on every style load: custom sources and layers must be re-added after `setStyle`. */
   const [styleGen, setStyleGen] = useState(0)
+  /** True between `setStyle` and its `style.load`: the style is not usable yet. */
+  const swapping = useRef(false)
   const [buildingSrc, setBuildingSrc] = useState<'pending' | 'basemap' | string>('pending')
 
   const live = useRef({ mapMode, reduce })
@@ -121,7 +123,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       attributionControl: { compact: true },
       fadeDuration: live.current.reduce ? 0 : 300,
     })
-    m.on('style.load', () => setStyleGen((g) => g + 1))
+    m.on('style.load', () => {
+      swapping.current = false
+      setStyleGen((g) => g + 1)
+    })
     m.on('rotate', () => publishBearing(m.getBearing()))
     setMap(m)
 
@@ -143,6 +148,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   useEffect(() => {
     if (!map || styleKey === firstStyle.current) return
     firstStyle.current = styleKey
+    // Until style.load fires, the old layers are gone: overlay effects must not touch the map.
+    swapping.current = true
     map.setStyle(buildMapStyle(config.basemap, theme, !env.mapStyleUrl), { diff: false })
   }, [map, styleKey, config.basemap, theme])
 
@@ -160,7 +167,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const ready = !!map && styleGen > 0 && buildingSrc !== 'pending'
 
   useEffect(() => {
-    if (!ready) return
+    if (!ready || swapping.current) return
     setData(map, 'fof-routes', routeFeatures(routes, riskPalette()))
     map.setPaintProperty('fof-route-casing', 'line-color', cssVar('--background'))
     map.setPaintProperty('fof-route-alt', 'line-color', cssVar('--muted-foreground'))
@@ -168,12 +175,12 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
 
   const heat = useMemo(() => demoRiskCells(), [])
   useEffect(() => {
-    if (!ready) return
+    if (!ready || swapping.current) return
     setData(map, 'fof-heat', heatOn ? heatFeatures(heat, riskPalette()) : EMPTY)
   }, [ready, map, styleGen, heatOn, heat, theme])
 
   useEffect(() => {
-    if (!ready) return
+    if (!ready || swapping.current) return
     setData(map, 'fof-places', placeFeatures(selectedId))
     map.setPaintProperty('fof-place-casing', 'line-color', cssVar('--background'))
     map.setPaintProperty('fof-place-ring', 'line-color', cssVar('--selected'))
@@ -182,7 +189,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
 
   // ── Camera mode ──────────────────────────────────────────────────────────
   useEffect(() => {
-    if (ready) applyMode(map, mapMode, ms)
+    if (ready && !swapping.current) applyMode(map, mapMode, ms)
   }, [ready, map, mapMode, ms])
 
   // ── Padding and fit ──────────────────────────────────────────────────────
@@ -238,7 +245,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
 
   // ── Taps on the map itself: demo footprints, then heat cells ─────────────
   useEffect(() => {
-    if (!ready) return
+    if (!ready || swapping.current) return
     const onClick = (e: MapMouseEvent) => {
       if ((e.originalEvent.target as Element | null)?.closest?.('.maplibregl-marker')) return
       const place = map.queryRenderedFeatures(e.point, { layers: ['fof-place-fill'] })[0]

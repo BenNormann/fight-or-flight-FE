@@ -1,11 +1,12 @@
 import { Component, Suspense, lazy, type CSSProperties, type ReactNode } from 'react'
-import { Outlet } from 'react-router'
+import { Outlet, useLocation } from 'react-router'
 import { useCapabilities } from '@/api/capabilities'
-import { useAppConfig } from '@/api/queries'
+import { useAppConfig, useLiveLocation } from '@/api/queries'
 import { cn } from '@/lib/cn'
 import { env } from '@/lib/env'
 import { useAppStore } from '@/state/store'
 import { SHEET_PEEK_PX, Toaster, useBreakpoint, useThemeController } from '@/ui'
+import { isLoginPath } from './authGate'
 import { DesktopLayout, TouchLayout } from './layouts'
 import { useStoreToUrl } from './urlSync'
 
@@ -30,11 +31,14 @@ class MapBoundary extends Component<{ children: ReactNode }, { failed: boolean }
 export function Shell() {
   useThemeController()
   useStoreToUrl()
+  useLiveLocation(useAppStore((s) => s.liveLocationOptIn))
   const breakpoint = useBreakpoint()
   const config = useAppConfig()
   const capabilities = useCapabilities()
   const served = Object.values(capabilities).filter(Boolean).length
   const snap = useAppStore((s) => s.sheetSnap)
+  // Sign-in pages replace the chrome (sheet, panel, controls); the map stays mounted but inert underneath.
+  const signingIn = isLoginPath(useLocation().pathname)
   // Map attribution is a licence requirement: keep it on screen and clear of chrome.
   // Phone: bottom left, just above the sheet's top edge (FAB and controls are on the right).
   const attributionBottom = snap === 'half' ? 'calc(50dvh + 8px)' : `calc(var(--safe-bottom) + ${SHEET_PEEK_PX + 8}px)`
@@ -51,7 +55,11 @@ export function Shell() {
   return (
     <div data-testid="app-shell" data-layout={breakpoint} className="relative isolate h-dvh w-full overflow-hidden bg-background">
       {/* Chrome first in the DOM so search and the panel come before map pins in tab order; z-index keeps the map underneath. */}
-      {breakpoint === 'desktop' ? <DesktopLayout footer={status} /> : <TouchLayout tablet={breakpoint === 'tablet'} footer={status} />}
+      {signingIn ? null : breakpoint === 'desktop' ? (
+        <DesktopLayout footer={status} />
+      ) : (
+        <TouchLayout tablet={breakpoint === 'tablet'} footer={status} />
+      )}
       <div
         className={cn(
           // `!`: MapLibre's stylesheet is unlayered, so it beats Tailwind's utilities layer otherwise.
@@ -62,6 +70,7 @@ export function Shell() {
               '[&_.maplibregl-ctrl-bottom-right]:right-20! [&_.maplibregl-ctrl-bottom-right]:bottom-(--safe-bottom)!',
         )}
         style={{ '--attribution-bottom': attributionBottom } as CSSProperties}
+        inert={signingIn}
       >
         <MapBoundary>
           <Suspense fallback={null}>

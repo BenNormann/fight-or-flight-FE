@@ -4,6 +4,7 @@ import ActiveRoutePill from '@/features/route/ActiveRoutePill'
 import { cn } from '@/lib/cn'
 import { useAppStore } from '@/state/store'
 import { BottomSheet, SHEET_PEEK_PX, SIDE_PANEL_PX, SidePanel } from '@/ui'
+import { AccountButton } from './AccountButton'
 import { CategoryChips, ControlStack, DirectionsFab, MapSearch } from './controls'
 import { ViewHost } from './ViewHost'
 
@@ -25,7 +26,7 @@ export function TouchLayout({ tablet, footer }: { tablet: boolean; footer: React
         style={{ paddingTop: 'calc(var(--safe-top) + 12px)' }}
       >
         <div className="px-gutter md:w-100 md:pr-0" style={{ paddingLeft: 'calc(var(--safe-left) + 16px)' }}>
-          <MapSearch />
+          <MapSearch trailing={<AccountButton />} />
         </div>
         <CategoryChips bleed={false} className="pointer-events-auto" />
         <AnimatePresence>
@@ -87,7 +88,7 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
         transition={{ duration: reduce ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
         {/* Left bleed only: chip text lines up with the route pill below; the right edge fades under the mask. */}
-        <CategoryChips bleed={false} className={cn('pointer-events-auto -ml-4', open ? 'max-w-[calc(100vw-464px)]' : 'max-w-[calc(100vw-64px)]')} />
+        <CategoryChips bleed={false} className={cn('pointer-events-auto -ml-4', open ? 'max-w-[calc(100vw-520px)]' : 'max-w-[calc(100vw-120px)]')} />
         <AnimatePresence>
           {active ? (
             <motion.div key="pill" className="w-full max-w-sm" {...fade}>
@@ -96,6 +97,11 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
           ) : null}
         </AnimatePresence>
       </motion.div>
+
+      {/* Account: top right over the map, level with the chip row. */}
+      <div className="pointer-events-none absolute top-4 right-6 z-(--z-chrome)">
+        <AccountButton overMap />
+      </div>
 
       <div className="pointer-events-none absolute right-6 bottom-6 z-(--z-chrome) flex flex-col items-end gap-3">
         <ControlStack zoom />

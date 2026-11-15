@@ -1,7 +1,9 @@
 import { motion, useReducedMotion } from 'motion/react'
 import { Suspense, lazy, useEffect, useRef, type ComponentType, type ReactNode } from 'react'
+import { useSession } from '@/api/queries'
 import ExploreView from '@/features/explore/ExploreView'
 import { useAppStore, type PanelView } from '@/state/store'
+import { gateFor } from './authGate'
 
 /** Explore is the first paint; every other view is its own chunk. */
 const views: Record<PanelView, ComponentType> = {
@@ -75,7 +77,11 @@ export function ViewHost({ footer }: { footer?: ReactNode }) {
   const view = useAppStore((s) => s.view)
   const selection = useAppStore((s) => s.selection)
   const reduce = useReducedMotion() ?? false
-  const View = views[view]
+  // Directions are gated: until the session settles (and while the redirect to sign-in runs), show the
+  // skeleton so nothing gated renders or fetches first.
+  const { status } = useSession()
+  const held = view === 'directions' && gateFor('/route', status) !== 'allow'
+  const View = held ? ViewSkeleton : views[view]
   const key = `${view}:${selection?.kind ?? ''}:${selection?.id ?? ''}`
   const ref = useFocusHeadingOnChange(key)
 

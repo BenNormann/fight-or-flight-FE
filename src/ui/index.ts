@@ -33,6 +33,10 @@ export {
   type SwitchRowProps,
   type ViewHeaderProps,
 } from './primitives'
+/** Lazy: Base UI's menu loads on first open. Render inside Suspense; `MenuTriggerStub` is the static stand-in. */
+export const Menu = lazy(() => import('./Menu'))
+export type { MenuEntry, MenuProps } from './Menu'
+export { MenuTriggerStub } from './MenuTriggerStub'
 export { SearchBar, type SearchBarProps } from './SearchBar'
 export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } from './SegmentedControl'
 export { SidePanel } from './SidePanel'

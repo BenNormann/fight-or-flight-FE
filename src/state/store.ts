@@ -26,6 +26,8 @@ export interface AppState {
   activeRouteId: Id | null
   /** Layer ids the user toggled, overriding each LayerDef.defaultOn. */
   layerOverrides: Record<string, boolean>
+  /** The user opted in to sharing live location while signed in. Off by default; not persisted. */
+  liveLocationOptIn: boolean
 
   setMapMode: (mode: MapMode) => void
   /** Selecting an entity opens its view at half; clearing returns to explore at peek. */
@@ -41,6 +43,7 @@ export interface AppState {
   endRoute: () => void
   setLeaveAt: (at: IsoTime | null) => void
   toggleLayer: (id: string, on: boolean) => void
+  setLiveLocationOptIn: (on: boolean) => void
   /** Back one level: detail → explore. */
   back: () => void
 }
@@ -62,6 +65,7 @@ export const useAppStore = create<AppState>()((set) => ({
   destination: null,
   activeRouteId: null,
   layerOverrides: {},
+  liveLocationOptIn: false,
 
   setMapMode: (mapMode) => set({ mapMode }),
   select: (selection) =>
@@ -95,6 +99,7 @@ export const useAppStore = create<AppState>()((set) => ({
   endRoute: () => set({ activeRouteId: null }),
   setLeaveAt: (leaveAt) => set({ leaveAt }),
   toggleLayer: (id, on) => set((s) => ({ layerOverrides: { ...s.layerOverrides, [id]: on } })),
+  setLiveLocationOptIn: (liveLocationOptIn) => set({ liveLocationOptIn }),
   back: () =>
     set((s) => {
       if (s.view === 'search' || s.view === 'explore') {

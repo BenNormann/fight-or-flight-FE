@@ -24,17 +24,26 @@ function url(path: string, query?: Query) {
   return `${env.apiBase}${path}${s ? `?${s}` : ''}`
 }
 
-/** Returns unvalidated JSON. Adapters must parse it with Zod before it goes anywhere. */
+/** Absolute URL for a backend path, for full-page navigations (e.g. sign-in) rather than fetches. */
+export function apiUrl(path: string, query?: Query) {
+  return url(path, query)
+}
+
+/**
+ * Returns unvalidated JSON (`null` for an empty body such as 204). Adapters must parse it with Zod
+ * before it goes anywhere. Sends cookies: the session is an httpOnly cookie (docs/BACKEND_CONTRACT.md).
+ */
 export async function apiFetch(
   path: string,
-  opts: { query?: Query; body?: unknown; signal?: AbortSignal } = {},
+  opts: { query?: Query; body?: unknown; method?: 'GET' | 'POST'; signal?: AbortSignal } = {},
 ): Promise<unknown> {
   let res: Response
   try {
     res = await fetch(url(path, opts.query), {
-      method: opts.body === undefined ? 'GET' : 'POST',
+      method: opts.method ?? (opts.body === undefined ? 'GET' : 'POST'),
       headers: opts.body === undefined ? { Accept: 'application/json' } : { Accept: 'application/json', 'Content-Type': 'application/json' },
       body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      credentials: 'include',
       signal: opts.signal,
     })
   } catch (cause) {
@@ -42,5 +51,7 @@ export async function apiFetch(
     throw new ApiError(0, path, `Network error for ${path}`)
   }
   if (!res.ok) throw new ApiError(res.status, path)
-  return res.json()
+  if (res.status === 204) return null
+  const text = await res.text()
+  return text ? (JSON.parse(text) as unknown) : null
 }
