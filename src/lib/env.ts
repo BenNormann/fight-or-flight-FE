@@ -24,6 +24,12 @@ export const env = {
   useMocks: mocksFlag === 'true' || (!apiUrl && mocksFlag !== 'false'),
   /** Optional basemap override; wins over the backend config. */
   mapStyleUrl: (raw.VITE_MAP_STYLE_URL as string | undefined) || undefined,
-  /** In dev, requests go to the Vite proxy (same origin). In prod, straight to the backend. */
-  apiBase: raw.DEV ? '' : (apiUrl ?? ''),
+  /**
+   * API calls and sign-in always go to this site's own `/api`, which is forwarded to the backend
+   * (Vite proxy in dev, the host's rewrite in production: see vercel.json). Same origin means the
+   * session cookie is first-party and the OAuth callback lands on this site, as the backend expects.
+   */
+  apiBase: '',
+  /** Large static tiles skip the forwarder in production and load straight from the backend (CORS is open for them). */
+  tilesBase: raw.DEV ? '' : (apiUrl ?? ''),
 } as const
