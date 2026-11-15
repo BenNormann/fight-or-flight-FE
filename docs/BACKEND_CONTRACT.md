@@ -1,6 +1,25 @@
 # Backend contract
 
-**Status: read from backend source on 2026-11-14.** Repo `RithvikR1218/fight-or-flight-BE`, branch `backend-setup` (HEAD `f8d2f98`, not merged; `main` has only a README). Shapes come from handler code, not from a running server: nothing was executed, and the backend declares no response schemas. Re-sync when that branch merges or changes.
+**Status: read from backend source on 2026-11-14, then checked against the hosted backend the same day (see "Hosted backend").** Repo `RithvikR1218/fight-or-flight-BE`, branch `backend-setup` (HEAD `f8d2f98`, not merged; `main` has only a README). Shapes come from handler code, not from a running server: nothing was executed, and the backend declares no response schemas. Re-sync when that branch merges or changes.
+
+## Hosted backend (checked live 2026-11-14, read-only requests)
+
+Base URL: `https://trojan-odyssey.northcentralus.cloudapp.azure.com` (API title "USC Safe-Route Data API", v1). Set it locally as `VITE_API_URL` in `.env.local`; never commit it into code.
+
+| Area | Live result |
+|---|---|
+| `/health`, `/sources`, `/observations/metrics` | 200. Ingestors `lapd`, `lapd_nibrs`, `nws`, `openmeteo`, `sun` ok; `la311` skipped |
+| `/incidents?bbox`, `/incidents/hourly` | 200 with data. Incident shape as documented below; `severity` can be `null` |
+| `/buildings.pmtiles` | **Built.** 206 on range requests, 101 MB, `Accept-Ranges: bytes`, CORS `*` |
+| `/cells`, `/roads`, `/buildings`, `/observations/latest` (campus bbox) | 200 but **empty**: static tables look unloaded on the host |
+| `/pois`, `/pois/types` (NEW) | 200 but empty. GeoJSON FeatureCollection; params `bbox, type, cells, limit`; extra attributes (e.g. `table_count_est`) merged into feature properties |
+| `/risk/status` (NEW) | 200 `{available: false, reason: "missing crime.db…"}` |
+| `/risk/score`, `/risk/hotzones`, `/risk/edges` (NEW) | **503** until the model is loaded. `score`: risk + SHAP factors for a point (`lat,lng`) or `cell`, at `at` / `date`+`hour`. `hotzones`: risk per modelled cell for one hour plus `no_data_cells`. `edges`: risk-weighted cost per walk-graph edge (join to `/roads/graph` on `u,v,key`) |
+| `/auth/*`, `/location` | **404.** Not deployed |
+| Routing | Still no route endpoint. `/risk/edges` + `/roads/graph` are routing inputs, not routes |
+| CORS | `/api/*` echoes the request origin (`Vary: Origin`); no `Access-Control-Allow-Credentials` seen, which cookie sign-in will need |
+
+FE consequences: `/risk/status` is the capability probe for risk (treat 503 as "not served"). Response bodies for the risk endpoints are unverified until the model is loaded.
 
 ## Setup
 
@@ -39,6 +58,7 @@ Buildings: 969,395 LA County footprints (LARIAC 2020) within ~16 km (10 miles) o
 |---|---|
 | Risk score per cell with factors | **Gap.** Branch `algorithm-init` has an XGBoost crime-risk model and plans `GET /hotzones?hour`, `GET /score?lat&lng&hour`; not implemented. FE must not compute risk |
 | Safe routing | **Gap.** `GET /route` is planned in `algorithm-init`, not implemented |
+| Turn-by-turn steps | **Gap.** The FE's turn banner needs steps with each route: `{maneuver, at: [lng, lat], offset_m, distance_m, name?}` (maneuver: depart, straight, slight/sharp left/right, left, right, u-turn, arrive). The FE renders steps; it does not derive them from geometry in production |
 | Building names, codes, floors, rooms | **Gap.** No campus building identity anywhere in the API |
 | Search | **Gap** (nothing to search without named places) |
 | POIs (blue lights, DPS, bike racks, seating) | **Gap.** `algorithm-init` references a blue-light CSV that is not in the repo |
@@ -64,7 +84,7 @@ The backend has no auth today. The FE is built against this proposal behind one 
 | `GET /api/v1/auth/callback` | Provider returns here. Backend creates the session (httpOnly cookie) and redirects to `next` |
 | `GET /api/v1/auth/me` | `200 {id, email, name?, picture?}` when signed in, `401` otherwise |
 | `POST /api/v1/auth/logout` | `204`, clears the session |
-| `POST /api/v1/location` (signed in) | Body `{lat, lng, accuracy_m, heading_deg?, speed_mps?, ts}` → `204`. `401` when signed out |
+| `POST /api/v1/location` (signed in) | Body `{lat, lng, accuracy_m, speed_mps?, ts}` → `204`. No direction: heading stays on the device (owner decision; the algorithm does not use it). `401` when signed out |
 
 Decided by the product owner (2026-11-14):
 - Sign-in is limited to `@usc.edu` accounts. The backend must enforce this; on rejection it should redirect to the FE's `/login?error=domain`.
