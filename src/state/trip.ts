@@ -9,7 +9,7 @@ import { useCapability } from '@/api/capabilities'
 import { recallPlace, routeErrorMessage, usePlace, usePointName, useRoutes } from '@/api/queries'
 // DEMO: place names and sample routes until the backend serves places (docs/BACKEND_CONTRACT.md).
 import { ORIGIN, demoRoutes, placeOf } from '@/demo'
-import type { Id, LngLat, Route } from '@/domain'
+import type { Id, IsoTime, LngLat, Route } from '@/domain'
 import { env } from '@/lib/env'
 import { useUserLocation } from '@/lib/geo/location'
 import { distanceM } from '@/lib/nav/geo'
@@ -48,7 +48,7 @@ export const YOUR_LOCATION = 'Your location'
 /** Pace per mode. The planner returns one walking line; other modes only change the time. */
 const SPEED_MPS: Record<TravelMode, number> = { walk: 1.35, bike: 4.6, ride: 7.5 }
 const RIDE_WAIT_S = 240
-/** "Your location" as a start is re-planned only after moving this far, and never during a started route. */
+/** "Your location" as a start is re-planned only after moving this far, and during a started route only by `rerouteFrom`. */
 const REPLAN_AFTER_M = 40
 /** The planner works within the study area; a start far outside it is not usable. */
 const MAX_FROM_CENTER_M = 20_000
@@ -94,6 +94,38 @@ const subscribeAnchor = (l: () => void) => {
   anchorListeners.add(l)
   return () => anchorListeners.delete(l)
 }
+const anchorChanged = () => anchorListeners.forEach((l) => l())
+
+/** How a re-plan ended: `ok` with the new route in place, or not (the route being followed stays). */
+export type RerouteOutcome = { ok: true } | { ok: false; message: string }
+
+/** A re-plan of the started trip from where the user is, waiting on the planner. `prev*` is what it replaces. */
+interface PendingReroute {
+  prevFrom: LngLat
+  prevAt: IsoTime | null
+  onDone?: (outcome: RerouteOutcome) => void
+}
+let reroute: PendingReroute | null = null
+const getReroute = () => reroute
+
+/** A re-plan is waiting on the planner. */
+export const isRerouting = () => reroute !== null
+
+/**
+ * The user left the started route: plan again from `at` (their position) to the same destination,
+ * leaving now so risk is for the current hour. The started route stays on screen until the new one
+ * arrives; if planning fails, it stays for good. Only for trips that start at "your location"
+ * (a trip from a place is played through, not followed). Returns false when nothing was started.
+ */
+export function rerouteFrom(at: LngLat, onDone?: (outcome: RerouteOutcome) => void): boolean {
+  const s = useAppStore.getState()
+  if (s.activeRouteId === null || s.origin !== null || s.destination === null || reroute) return false
+  reroute = { prevFrom: anchorAt ?? at, prevAt: s.leaveAt, onDone }
+  anchorAt = at
+  if (s.leaveAt) s.setLeaveAt(null)
+  anchorChanged()
+  return true
+}
 
 export function useTrip(): Trip {
   const origin = useAppStore((s) => s.origin)
@@ -111,7 +143,7 @@ export function useTrip(): Trip {
     if (!me || started) return
     if (anchorAt && distanceM(anchorAt, me) < REPLAN_AFTER_M) return
     anchorAt = me
-    anchorListeners.forEach((l) => l())
+    anchorChanged()
   }, [me, started])
 
   const originPlace = useTripPlace(origin)
@@ -124,8 +156,35 @@ export function useTrip(): Trip {
   const request = useMemo(() => (live && from && to ? { from: from.lngLat, to: to.lngLat, ...(leaveAt ? { at: leaveAt } : {}) } : null), [live, from, to, leaveAt])
   const planned = useRoutes(request, live)
 
+  // While a re-plan loads (or after it failed), keep the route being followed: it is still in the query cache.
+  const pending = useSyncExternalStore(subscribeAnchor, getReroute, getReroute)
+  const heldRequest = useMemo(
+    () => (pending && request ? { from: pending.prevFrom, to: request.to, ...(pending.prevAt ? { at: pending.prevAt } : {}) } : null),
+    [pending, request],
+  )
+  const held = useRoutes(heldRequest, live)
+  useEffect(() => {
+    // Every caller of this hook sees the same pending re-plan; the first to see it settle resolves it.
+    if (!pending || reroute !== pending) return
+    const finish = (outcome: RerouteOutcome | null) => {
+      reroute = null
+      anchorChanged()
+      if (outcome) pending.onDone?.(outcome)
+    }
+    if (!started || origin !== null) return finish(null)
+    if (!live || planned.isSuccess) return finish({ ok: true })
+    if (planned.isError) {
+      // Back to the start the followed route was planned from, so the trip shows that route again.
+      anchorAt = pending.prevFrom
+      if (pending.prevAt) useAppStore.getState().setLeaveAt(pending.prevAt)
+      finish({ ok: false, message: routeErrorMessage(planned.error) })
+    }
+  }, [pending, started, origin, live, planned.isSuccess, planned.isError, planned.error])
+  const plannedData = planned.data ?? (pending ? held.data : undefined)
+  const plannedFailed = planned.isError && !pending
+
   const demo = useMemo(() => (live || !from || !to ? [] : demoRoutes(to.id, travelMode, from.lngLat, to.lngLat)), [live, from, to, travelMode])
-  const liveRoutes = useMemo(() => retimed(planned.data ?? [], travelMode), [planned.data, travelMode])
+  const liveRoutes = useMemo(() => retimed(plannedData ?? [], travelMode), [plannedData, travelMode])
   const routes = live ? liveRoutes : demo
 
   const status: TripStatus = !to
@@ -136,9 +195,9 @@ export function useTrip(): Trip {
         : 'incomplete'
       : !live
         ? 'ready'
-        : planned.isError
+        : plannedFailed
           ? 'error'
-          : planned.data?.length
+          : plannedData?.length
             ? 'ready'
             : 'loading'
 

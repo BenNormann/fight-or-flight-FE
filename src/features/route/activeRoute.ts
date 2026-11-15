@@ -14,7 +14,8 @@ export function useActiveTrip(): ActiveTrip | null {
   const { routes, to } = useTrip()
   return useMemo(() => {
     if (!activeRouteId) return null
-    const route = routes.find((r) => r.id === activeRouteId)
+    // After a re-plan the planner may send one route where there were two (safest and fastest agree): follow it.
+    const route = routes.find((r) => r.id === activeRouteId) ?? (routes.length === 1 ? routes[0] : undefined)
     return route && to ? { route, destinationName: to.name } : null
   }, [activeRouteId, routes, to])
 }
