@@ -1,4 +1,4 @@
-# Fight or Flight — Frontend Architecture
+# Odyssey — Frontend Architecture
 
 Mobile-first campus safety map for USC. One map, one bottom sheet, many data layers.
 Guiding rule: **every new feature is either a layer, a sheet, or both.** If it doesn't fit, question the feature first.

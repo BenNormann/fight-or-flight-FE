@@ -1,5 +1,5 @@
 /*
- * Fight or Flight design tokens. Supervisor-owned. Rationale: docs/DESIGN.md.
+ * Odyssey design tokens. Supervisor-owned. Rationale: docs/DESIGN.md.
  *
  * Import AFTER `@import "tailwindcss";` in the app entry stylesheet.
  * Layout: 1) theme-dependent values as shadcn-named variables on :root (light)

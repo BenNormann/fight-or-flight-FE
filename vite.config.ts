@@ -17,9 +17,9 @@ export default defineConfig(({ mode }) => {
         injectRegister: false,
         includeAssets: ['icon.svg'],
         manifest: {
-          name: 'Fight or Flight',
-          short_name: 'FoF',
-          description: 'USC campus safety map',
+          name: 'Odyssey',
+          short_name: 'Odyssey',
+          description: 'USC campus map with safe walking directions',
           display: 'standalone',
           orientation: 'portrait',
           background_color: '#0b0d10',

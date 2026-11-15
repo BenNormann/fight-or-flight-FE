@@ -1,5 +1,5 @@
 /**
- * Cult UI Halo Toast, trimmed for Fight or Flight.
+ * Cult UI Halo Toast, trimmed for Odyssey.
  *
  * Removed from upstream: hue gradient rim blobs, the looping border trail, the
  * per-glyph stagger and the Next.js-only `<style jsx>` block. Toasts are never

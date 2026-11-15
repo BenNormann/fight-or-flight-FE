@@ -1,4 +1,4 @@
-# Fight or Flight — Component sources
+# Odyssey — Component sources
 
 One library component per UI slot. Everything lands in `src/ui/vendor/` through the shadcn CLI and is wrapped once in `src/ui/`. Checked 2026-11-14 by fetching each item's registry JSON (dependencies, imports and source read). Nothing was installed and the CLI was not run, see "Unverified".
 

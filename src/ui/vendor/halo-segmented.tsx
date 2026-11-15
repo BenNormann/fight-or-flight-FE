@@ -2,7 +2,7 @@
 
 /**
  * Segmented control (single-select toggle group): frosted track, sliding thumb.
- * Project trim (Fight or Flight): the looping hue rim was removed (chrome is
+ * Project trim (Odyssey): the looping hue rim was removed (chrome is
  * monochrome, nothing loops) and the thumb moves via a shared layout element
  * (transform only) instead of animating width. Items are 44px tall.
  */

@@ -1,4 +1,4 @@
-# Fight or Flight — Design
+# Odyssey — Design
 
 A detailed campus map (plus ~10 miles around), modelled on Google Maps and Waze. Safety is one feature inside it, never the identity. Tokens: `src/styles/tokens.css`. Visual law: `.claude/skills/landing-page-design/SKILL.md` Part B. Design at 390×844, check 360×780, 768 and 1440×900, both themes.
 

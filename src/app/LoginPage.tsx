@@ -80,7 +80,7 @@ export function LoginPage() {
   return (
     <AuthFrame onBack={back} backLabel="Back to map">
       <BrandMark />
-      <h1 className="heading-5 mt-6">Sign in to Fight or Flight</h1>
+      <h1 className="heading-5 mt-6">Sign in to Odyssey</h1>
       <p className="body-3 mt-2 text-muted-foreground">
         {directions ? 'Sign in with your USC email to get walking directions.' : 'Sign in with your USC email to use directions and location sharing.'}
       </p>

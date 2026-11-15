@@ -1,4 +1,6 @@
-# Fight or Flight FE — rules for every agent
+# Odyssey FE — rules for every agent
+
+Odyssey is the app's official name (a play on USC Trojans and going on a trip). The repo is still `fight-or-flight-FE`; use "Odyssey" in anything a user sees.
 
 Read `docs/ARCHITECTURE.md` sections only as your brief points you to. Don't re-read whole docs.
 

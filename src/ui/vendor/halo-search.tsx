@@ -317,7 +317,7 @@ function AnimatedPlaceholder({
 }
 
 /*
- * Project trim (Fight or Flight): the Warp shader avatar, the looping hue
+ * Project trim (Odyssey): the Warp shader avatar, the looping hue
  * gradient rim and the typing-burst state were removed. Chrome is monochrome
  * and never loops (docs/DESIGN.md §1, §3.5). `leading` replaces the avatar.
  */
