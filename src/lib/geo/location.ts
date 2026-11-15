@@ -49,24 +49,34 @@ export function toLocationFix(p: GeolocationPosition): LocationFix {
   }
 }
 
-function watch(g: Geolocation) {
+/** The browser refused when we actually asked (not what the permission query guessed). */
+let refused = false
+
+function watch(g: Geolocation, highAccuracy = true) {
   if (watchId !== null) return
   watchId = g.watchPosition(
     (p) => {
+      refused = false
       const fix = toLocationFix(p)
       set({ status: 'granted', fix, asking: false })
       settle(fix)
     },
     (e) => {
-      // Denied is final until the user changes the browser setting. Timeouts and "unavailable" keep the watch.
+      g.clearWatch(watchId!)
+      watchId = null
       if (e.code === e.PERMISSION_DENIED) {
-        g.clearWatch(watchId!)
-        watchId = null
+        refused = true
         set({ status: 'denied', fix: null, asking: false })
-      } else set({ asking: false })
-      settle(null)
+        settle(null)
+      } else if (highAccuracy && !state.fix) {
+        // No GPS fix in time (indoors, or precise location off on iOS): a coarse position beats none.
+        watch(g, false)
+      } else {
+        set({ asking: false })
+        settle(null)
+      }
     },
-    { enableHighAccuracy: true, maximumAge: 5_000, timeout: 20_000 },
+    { enableHighAccuracy: highAccuracy, maximumAge: 10_000, timeout: highAccuracy ? 12_000 : 20_000 },
   )
 }
 
@@ -78,8 +88,14 @@ export async function initLocation(): Promise<void> {
   try {
     const p = await navigator.permissions.query({ name: 'geolocation' })
     const apply = () => {
-      if (p.state === 'granted') watch(g)
-      set({ status: p.state, ...(p.state === 'denied' ? { fix: null } : {}) })
+      if (p.state === 'granted') {
+        watch(g)
+        if (!state.fix) set({ status: 'granted' })
+      } else if (!state.fix && !refused) {
+        // Safari's answer here is unreliable (it can say "denied" or stay on "prompt" whatever the user chose),
+        // so anything short of "granted" only means: ask. A real refusal comes from the request itself.
+        set({ status: 'prompt' })
+      }
     }
     apply()
     p.onchange = apply
@@ -89,7 +105,10 @@ export async function initLocation(): Promise<void> {
   }
 }
 
-/** Ask for the position (this is what opens the browser prompt). Resolves with the first fix, or null. */
+/**
+ * Ask for the position (this is what opens the browser prompt). Resolves with the first fix, or null.
+ * Always really asks, even after an earlier refusal: the user may have changed the setting since.
+ */
 export function requestLocation(): Promise<LocationFix | null> {
   const g = geo()
   if (!g) {
@@ -97,7 +116,6 @@ export function requestLocation(): Promise<LocationFix | null> {
     return Promise.resolve(null)
   }
   if (state.fix && watchId !== null) return Promise.resolve(state.fix)
-  if (state.status === 'denied') return Promise.resolve(null)
   set({ asking: true })
   return new Promise((resolve) => {
     waiting.push(resolve)
@@ -118,6 +136,7 @@ export const LOCATION_DENIED_HELP = "Location is blocked for this site. Allow it
 /** Tests only. */
 export function resetLocationForTest(next: Partial<LocationState> = {}) {
   watchId = null
+  refused = false
   waiting = []
   state = { status: 'unknown', fix: null, asking: false, ...next }
   listeners.forEach((l) => l())

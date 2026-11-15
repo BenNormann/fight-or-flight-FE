@@ -172,7 +172,8 @@ function EndPicker({ end, onDone }: { end: TripEnd; onDone: () => void }) {
 /** "Your location" is the start but we do not have it: ask, or explain how to unblock it. */
 function NeedsLocation({ onChooseStart }: { onChooseStart: () => void }) {
   const { status, asking, fix } = useUserLocation()
-  const blocked = status === 'denied' || status === 'unsupported'
+  // After a refusal the button stays: the user may have unblocked location since, and asking again is harmless.
+  const blocked = status === 'unsupported'
   // A position we cannot use: the device is outside the area the map covers.
   const outside = !!fix
   return (

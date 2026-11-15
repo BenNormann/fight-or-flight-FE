@@ -27,6 +27,11 @@ export const LOCATE_ZOOM = 17
 /** Building footprints first draw at this zoom. */
 export const BUILDINGS_MIN_ZOOM = 13
 /**
+ * Layer zoom ranges are applied per tile, and a tilted view draws its far field from lower-zoom tiles.
+ * The layers therefore accept tiles from two levels lower; opacity (by camera zoom) decides what shows.
+ */
+export const BUILDINGS_TILE_MIN_ZOOM = BUILDINGS_MIN_ZOOM - 2
+/**
  * Iso and 3D: below this zoom buildings are a plain `fill` (no extrusion work on the GPU).
  * From here the extrusion layer takes over at height 0 and grows to full height by
  * {@link BUILDINGS_FULL_HEIGHT_ZOOM}, so the switch never pops. 15 keeps extrusion to

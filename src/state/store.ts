@@ -26,6 +26,8 @@ export interface AppState {
   origin: Id | null
   /** Destination for directions (an entity or pin id). */
   destination: Id | null
+  /** Map layers was opened over the directions view: the planned route stays on the map and closing layers returns to it. */
+  layersOverDirections: boolean
   /** The next tap on the map sets this end of the trip. */
   picking: TripEnd | null
   /** A started route; drives the active route pill. */
@@ -89,6 +91,7 @@ export const useAppStore = create<AppState>()((set) => ({
   origin: null,
   destination: null,
   picking: null,
+  layersOverDirections: false,
   activeRouteId: null,
   layerOverrides: {},
   liveLocationOptIn: false,
@@ -106,9 +109,12 @@ export const useAppStore = create<AppState>()((set) => ({
   // While navigating, "explore" (closing a view) returns to the trip.
   openView: (view) =>
     set((s) =>
-      view === 'explore' || view === 'navigation'
-        ? { view: homeView(s), selection: null, sheetSnap: 'peek', panelOpen: true }
-        : { view, sheetSnap: 'half', panelOpen: true },
+      // Closing layers that was opened from directions goes back to the directions, not to explore.
+      (view === 'explore' || view === 'navigation') && s.view === 'layers' && s.layersOverDirections
+        ? { view: 'directions', layersOverDirections: false, sheetSnap: 'half', panelOpen: true }
+        : view === 'explore' || view === 'navigation'
+          ? { view: homeView(s), selection: null, sheetSnap: 'peek', panelOpen: true, layersOverDirections: false }
+          : { view, sheetSnap: 'half', panelOpen: true, layersOverDirections: view === 'layers' && (s.view === 'directions' || (s.view === 'layers' && s.layersOverDirections)) },
     ),
   setSheetSnap: (sheetSnap) => set({ sheetSnap }),
   setPanelOpen: (panelOpen) => set({ panelOpen }),
@@ -156,6 +162,7 @@ export const useAppStore = create<AppState>()((set) => ({
     set((s) => {
       if (s.view === 'navigation') return {}
       if (s.picking) return { picking: null, sheetSnap: 'half' }
+      if (s.view === 'layers' && s.layersOverDirections) return { view: 'directions', layersOverDirections: false, sheetSnap: 'half' }
       if (s.view === 'search' || s.view === 'explore') {
         return { query: '', category: null, selection: null, view: homeView(s), sheetSnap: 'peek' }
       }

@@ -23,6 +23,7 @@ import { DEV_FALLBACK_STYLE, buildMapStyle, type MapTheme } from './basemap'
 import { backendBuildingsAvailable, backendBuildingsUrl, basemapBuildings, growWithZoom, pmtilesBuildings, type BuildingSource } from './buildings'
 import {
   BUILDINGS_EXTRUDE_ZOOM,
+  BUILDINGS_TILE_MIN_ZOOM,
   BUILDINGS_FADE_IN_ZOOM,
   TILE_LOD,
   BUILDINGS_MIN_ZOOM,
@@ -108,9 +109,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const overrides = useAppStore((s) => s.layerOverrides)
   const panelOpen = useAppStore((s) => s.panelOpen)
   const sheetSnap = useAppStore((s) => s.sheetSnap)
-  const view = useAppStore((s) => s.view)
   const origin = useAppStore((s) => s.origin)
   const picking = useAppStore((s) => s.picking)
+  // The planned route stays drawn while the user changes the map view from the layers panel.
+  const planning = useAppStore((s) => s.view === 'directions' || (s.view === 'layers' && s.layersOverDirections))
   const trip = useTrip()
   const me = useMyPosition()
   const routeKind = useAppStore((s) => s.routeKind)
@@ -171,6 +173,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     })
     m.setSourceTileLodParams(TILE_LOD.maxZoomLevelsOnScreen, TILE_LOD.tileCountMaxMinRatio)
     m.on('rotate', () => publishBearing(m.getBearing()))
+    m.on('zoom', () => syncBuildings(m, useAppStore.getState().mapMode))
     // 3D only: two fingers moving together vertically tilt. 2D and Iso: two fingers zoom.
     const removeTilt = installTouchTilt(m, () => cameraPresets[useAppStore.getState().mapMode].rotate)
     // Dev only: lets local gesture checks read the camera.
@@ -210,8 +213,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   }, [map, styleGen, buildingSrc])
 
   const routes = useMemo(
-    () => shownRoutes(trip.routes, { activeRouteId, directions: view === 'directions', routeKind }),
-    [trip.routes, activeRouteId, view, routeKind],
+    () => shownRoutes(trip.routes, { activeRouteId, directions: planning, routeKind }),
+    [trip.routes, activeRouteId, planning, routeKind],
   )
   const ready = !!map && styleGen > 0 && buildingSrc !== 'pending'
   /** The started route, while it is among the current routes. */
@@ -535,9 +538,9 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     // While navigating, the traveller replaces the "you are here" dot.
     () => [
       ...pinSpecs(me, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => !navLive || p.kind !== 'origin'),
-      ...tripPins({ from: origin === null ? null : trip.from, to: trip.to, show: view === 'directions' || navLive }),
+      ...tripPins({ from: origin === null ? null : trip.from, to: trip.to, show: planning || navLive }),
     ],
-    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, view],
+    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, planning],
   )
 
   return (
@@ -597,7 +600,7 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
       type: 'fill',
       source: buildings.source,
       'source-layer': buildings.sourceLayer,
-      minzoom: BUILDINGS_MIN_ZOOM,
+      minzoom: BUILDINGS_TILE_MIN_ZOOM,
       paint: { 'fill-color': color, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], BUILDINGS_MIN_ZOOM, 0, BUILDINGS_FADE_IN_ZOOM, 0.92] },
     })
     // Extrusion grows from 0 at its min zoom, so the hand-over from the flat layer never pops.
@@ -606,7 +609,9 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
       type: 'fill-extrusion',
       source: buildings.source,
       'source-layer': buildings.sourceLayer,
-      minzoom: BUILDINGS_EXTRUDE_ZOOM,
+      // Same tile range as the flat layer. A layer's zoom range is applied per tile, and a tilted view mixes
+      // tile zooms: a narrower range here leaves tiles with neither layer. `syncBuildings` picks the layer instead.
+      minzoom: BUILDINGS_TILE_MIN_ZOOM,
       layout: { visibility: 'none' },
       paint: {
         'fill-extrusion-color': color,
@@ -750,11 +755,21 @@ function applyMode(map: MlMap, mode: keyof typeof cameraPresets, duration: numbe
   }
   // `keepPose`: same mode as before (style reload, re-render). Free-rotate modes keep the user's orientation.
   if (!(keepPose && rotate)) map.easeTo({ pitch: p.pitch, bearing: rotate ? map.getBearing() || p.bearing : p.bearing, duration })
+  syncBuildings(map, mode)
+}
+
+/**
+ * Exactly one building layer shows, chosen by the camera zoom for the whole view: flat footprints in 2D
+ * and below the extrusion zoom, extrusion above it (starting at height 0, so the switch does not pop).
+ */
+function syncBuildings(map: MlMap, mode: keyof typeof cameraPresets) {
   if (!map.getLayer('fof-buildings')) return
-  // 2D: footprints only, no extrusion layer at all. Iso / 3D: footprints until the extrusion zoom.
-  const flat = mode === '2d'
-  map.setLayoutProperty('fof-buildings', 'visibility', flat ? 'none' : 'visible')
-  map.setLayerZoomRange('fof-buildings-flat', BUILDINGS_MIN_ZOOM, flat ? 24 : BUILDINGS_EXTRUDE_ZOOM)
+  const extrude = mode !== '2d' && map.getZoom() >= BUILDINGS_EXTRUDE_ZOOM
+  const want = { 'fof-buildings': extrude, 'fof-buildings-flat': !extrude }
+  for (const [id, on] of Object.entries(want)) {
+    const visibility = on ? 'visible' : 'none'
+    if (map.getLayoutProperty(id, 'visibility') !== visibility) map.setLayoutProperty(id, 'visibility', visibility)
+  }
 }
 
 // ── Pins ─────────────────────────────────────────────────────────────────────
