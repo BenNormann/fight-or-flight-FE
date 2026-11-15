@@ -43,11 +43,18 @@ export function AccountButton({ overMap = false }: { overMap?: boolean }) {
 
   const initial = (user.email.trim()[0] ?? '?').toUpperCase()
   const label = `Account, signed in as ${user.email}`
-  const triggerClassName = cn(overMap && 'bg-card shadow-float hover:bg-accent')
+  // Over the map the helmet is the whole control: no card circle behind it.
+  const triggerClassName = cn(overMap && 'bg-transparent shadow-none hover:bg-transparent')
   const avatar = (
-    <span aria-hidden className="title-4 relative grid size-8 place-items-center rounded-full bg-brand text-brand-foreground">
+    <span
+      aria-hidden
+      className={cn(
+        'title-4 relative grid place-items-center rounded-full bg-brand text-brand-foreground',
+        overMap ? 'size-[38px]' : 'size-[34px]',
+      )}
+    >
       {/* Sits in the helmet's eye band and slit, just below the brow. */}
-      <span className="translate-y-[3px] text-[13px] leading-none">{initial}</span>
+      <span className={cn('leading-none', overMap ? 'translate-y-[3.5px] text-[15px]' : 'translate-y-[3px] text-[14px]')}>{initial}</span>
       <HelmetMark />
     </span>
   )
