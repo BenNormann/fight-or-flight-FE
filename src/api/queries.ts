@@ -9,7 +9,7 @@ import { ApiError } from './client'
 import { fetchMe, logout } from './adapters/auth'
 import { fetchConfig } from './adapters/config'
 import { postLocation } from './adapters/location'
-import { markUnavailable, useCapabilities } from './capabilities'
+import { isUnavailable, markUnavailable, useCapabilities } from './capabilities'
 
 export const queryKeys = {
   config: ['config'] as const,
@@ -28,12 +28,16 @@ export function useAppConfig() {
 /**
  * `pending`: config or `/me` still loading. `off`: the backend serves no auth (nothing is gated).
  * A failed `/me` (network) counts as signed out, so sign-in stays reachable.
+ *
+ * The real backend serves no config endpoint yet (docs/BACKEND_CONTRACT.md), so when config fails
+ * `/me` itself is the probe: it answers 200/401 when auth is served, and a 404 turns auth off.
  */
 export type SessionStatus = 'pending' | 'off' | 'signedOut' | 'signedIn'
 
 export function useSession(): { status: SessionStatus; user: User | null } {
   const config = useAppConfig()
-  const { auth } = useCapabilities()
+  const { auth: configured } = useCapabilities()
+  const auth = configured || (config.isError && !isUnavailable('auth'))
   const me = useQuery({
     queryKey: queryKeys.session,
     queryFn: async ({ signal }) => {
