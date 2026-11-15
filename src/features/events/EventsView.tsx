@@ -1,8 +1,9 @@
 import { CalendarPlusIcon, CalendarXIcon, NavigationArrowIcon, ShareNetworkIcon } from '@phosphor-icons/react'
 import { events, findBuilding, findEvent } from '@/demo'
 import type { CampusEvent } from '@/domain'
+import { formatTime } from '@/lib/time'
 import { useAppStore } from '@/state/store'
-import { ActionBar, Button, EmptyState, ListRow, PlaceIcon, Section, ViewHeader, dayLabel, formatClock, notify } from '@/ui'
+import { ActionBar, Button, EmptyState, ListRow, PlaceIcon, Section, ViewHeader, dayLabel, notify } from '@/ui'
 
 function EventDetail({ event }: { event: CampusEvent }) {
   const directionsTo = useAppStore((s) => s.directionsTo)
@@ -13,14 +14,14 @@ function EventDetail({ event }: { event: CampusEvent }) {
     <div data-testid="view-event">
       <ViewHeader
         eyebrow={
-          <span className="text-brand-ink">
-            {dayLabel(event.start)} · <span className="font-mono">{formatClock(event.start)}</span>
+          <>
+            {dayLabel(event.start)} · <span className="font-mono">{formatTime(event.start)}</span>
             {event.end ? (
               <>
-                {' '}to <span className="font-mono">{formatClock(event.end)}</span>
+                {' '}to <span className="font-mono">{formatTime(event.end)}</span>
               </>
             ) : null}
-          </span>
+          </>
         }
         title={event.title}
         subtitle={[event.location, building?.name].filter(Boolean).join(', ')}
@@ -88,9 +89,9 @@ export default function EventsView() {
               <ListRow
                 key={e.id}
                 icon={<PlaceIcon type="event" />}
-                title={e.title}
+                title={<span className="block whitespace-normal line-clamp-2">{e.title}</span>}
                 subtitle={e.location}
-                meta={<span className="font-mono">{formatClock(e.start)}</span>}
+                meta={<span className="font-mono">{formatTime(e.start)}</span>}
                 onClick={() => select({ kind: 'event', id: e.id })}
               />
             ))}

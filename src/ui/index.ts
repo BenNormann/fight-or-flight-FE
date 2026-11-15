@@ -3,6 +3,8 @@ import { lazy } from 'react'
 
 /** Lazy: vaul is only downloaded on phones and tablets. */
 export const BottomSheet = lazy(() => import('./BottomSheet'))
+/** Lazy: sonner stays out of the first-paint bundle. Render inside Suspense. */
+export const Toaster = lazy(() => import('./toast'))
 export type { BottomSheetProps } from './BottomSheet'
 export { SHEET_PEEK_PX, SIDE_PANEL_PX } from './layout'
 export { breakpointFor, useBreakpoint, useViewportHeight, type Breakpoint } from './media'
@@ -36,6 +38,6 @@ export { SegmentedControl, type SegmentedControlProps, type SegmentedOption } fr
 export { SidePanel } from './SidePanel'
 export { StatusPill } from './StatusPill'
 export { THEME_MODES, nextThemeMode, resolveTheme, useTheme, useThemeController, type ThemeMode } from './theme'
-export { Toaster } from './toast'
-export { arrivalTime, dayLabel, formatClock, formatDistance, formatDuration } from './format'
+export { arrivalTime, dayLabel, formatDistance, formatDuration } from './format'
+/** Clock times: `formatTime` / `formatHour` from `@/lib/time`. */
 export { CategoryIcon, PlaceIcon } from './icons'

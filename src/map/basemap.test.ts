@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { basemapFromUrl, buildMapStyle } from './basemap'
+import { OPENFREEMAP_STYLES, basemapFromUrl, buildMapStyle } from './basemap'
 
 describe('basemap', () => {
   it('classifies a bare URL', () => {
@@ -13,5 +13,13 @@ describe('basemap', () => {
     expect(buildMapStyle({ kind: 'style', url: 'https://x.test/s.json' })).toBe('https://x.test/s.json')
     const style = buildMapStyle({ kind: 'raster', tiles: ['https://x.test/{z}/{x}/{y}.png'] })
     expect(typeof style).toBe('object')
+  })
+
+  it('swaps the public style with the theme, but never an override', () => {
+    const light = { kind: 'style' as const, url: OPENFREEMAP_STYLES.light }
+    expect(buildMapStyle(light, 'dark')).toBe(OPENFREEMAP_STYLES.dark)
+    expect(buildMapStyle(light, 'light')).toBe(OPENFREEMAP_STYLES.light)
+    expect(buildMapStyle(light, 'dark', false)).toBe(OPENFREEMAP_STYLES.light)
+    expect(buildMapStyle({ kind: 'style', url: 'https://x.test/s.json' }, 'dark')).toBe('https://x.test/s.json')
   })
 })

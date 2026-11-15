@@ -1,5 +1,5 @@
 import { ArrowLeftIcon, CaretRightIcon, IconContext, XIcon } from '@phosphor-icons/react'
-import type { ComponentProps, ReactNode } from 'react'
+import type { ComponentProps, KeyboardEvent, ReactNode } from 'react'
 import { cn } from '@/lib/cn'
 import { riskBand } from '@/lib/risk'
 import { Button as VendorButton } from '@/ui/vendor/button'
@@ -70,8 +70,8 @@ export function Button({ tone = 'secondary', icon, block, className, children, .
 export interface IconButtonProps extends ComponentProps<'button'> {
   label: string
   icon: ReactNode
-  /** `glass` (kept for compatibility) and `float` are the map control: opaque card with a float shadow. */
-  tone?: 'ghost' | 'secondary' | 'glass' | 'float'
+  /** `float` is the map control: opaque card with a float shadow. */
+  tone?: 'ghost' | 'secondary' | 'float'
 }
 
 /** Round 44px icon-only button with an accessible name. With `aria-pressed`, the active glyph turns brand ink. */
@@ -88,7 +88,7 @@ export function IconButton({ label, icon, tone = 'ghost', className, ...props }:
         press,
         tone === 'ghost' && 'hover:bg-accent',
         tone === 'secondary' && 'border border-border bg-secondary hover:bg-accent',
-        (tone === 'glass' || tone === 'float') && 'pointer-events-auto bg-card shadow-float hover:bg-accent',
+        tone === 'float' && 'pointer-events-auto bg-card shadow-float hover:bg-accent',
         className,
       )}
       {...props}
@@ -101,7 +101,7 @@ export function IconButton({ label, icon, tone = 'ghost', className, ...props }:
 export interface ChipProps extends ComponentProps<'button'> {
   icon?: ReactNode
   pressed?: boolean
-  /** Over the map: opaque card with `shadow-chip`. Otherwise (in a sheet): secondary fill, no shadow. */
+  /** Over the map: opaque card with `shadow-chip`. Otherwise (in a sheet): secondary fill, no shadow. Pressed: `primary` in both. */
   overMap?: boolean
 }
 
@@ -114,8 +114,9 @@ export function Chip({ icon, pressed, overMap, className, children, ...props }: 
         'button-sm inline-flex h-tap shrink-0 items-center gap-2 rounded-full px-4 whitespace-nowrap [&_svg]:size-4',
         focus,
         press,
+        // Pressed is neutral (inverted foreground) everywhere; brand colour is kept for the one primary action and map selection.
         pressed
-          ? 'bg-selected text-selected-foreground hover:bg-selected-hover'
+          ? cn('bg-primary text-primary-foreground hover:bg-primary/90', overMap && 'pointer-events-auto')
           : overMap
             ? 'pointer-events-auto bg-card text-card-foreground shadow-chip hover:bg-accent'
             : 'bg-secondary text-secondary-foreground hover:bg-accent',
@@ -141,6 +142,24 @@ export interface ChipRowProps {
 }
 
 /**
+ * Toolbar keys: ← → move between chips, Home / End jump to the ends. The focused
+ * chip scrolls into view (`scroll-px-4` keeps it clear of the edge fade).
+ */
+function moveFocusInRow(e: KeyboardEvent<HTMLElement>) {
+  const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']
+  if (!keys.includes(e.key)) return
+  const items = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('button:not([disabled])'))
+  const i = items.indexOf(document.activeElement as HTMLElement)
+  if (i < 0) return
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? items.length - 1 : i + (e.key === 'ArrowRight' ? 1 : -1)
+  const target = items[Math.max(0, Math.min(items.length - 1, next))]
+  e.preventDefault()
+  if (!target) return
+  target.focus({ preventScroll: true })
+  target.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+}
+
+/**
  * Horizontally scrolling chip row (docs/DESIGN.md §3 chip row). The scroller is
  * masked with `mask-fade-x` while content hides behind an edge. 8px block padding
  * cancelled by `-my-2` leaves room for `shadow-chip` inside the clip.
@@ -150,7 +169,9 @@ export function ChipRow({ label, className, children, bleed = true }: ChipRowPro
     <ScrollFade
       role="toolbar"
       aria-label={label}
+      aria-orientation="horizontal"
       data-slot="chip-row"
+      onKeyDown={moveFocusInRow}
       className={cn(
         'flex gap-2 overscroll-x-contain px-gutter py-2 -my-2 scroll-px-4',
         bleed && '-mx-gutter',
@@ -168,7 +189,7 @@ export interface ListRowProps extends Omit<ComponentProps<'button'>, 'title'> {
   subtitle?: ReactNode
   meta?: ReactNode
   chevron?: boolean
-  /** Selected row: `brand-subtle` fill and a brand ink tile icon. */
+  /** Selected row: neutral `accent` fill and an inverted tile (brand colour stays on the map). */
   selected?: boolean
 }
 
@@ -180,7 +201,7 @@ export function ListRow({ icon, title, subtitle, meta, chevron = true, selected,
       aria-current={selected || undefined}
       className={cn(
         '-mx-2 flex min-h-14 w-[calc(100%+16px)] items-center gap-3 rounded-xl px-2 py-2 text-left',
-        selected ? 'bg-brand-subtle text-brand-subtle-foreground' : 'hover:bg-accent',
+        selected ? 'bg-accent text-accent-foreground' : 'hover:bg-accent',
         focus,
         press,
         className,
@@ -192,7 +213,7 @@ export function ListRow({ icon, title, subtitle, meta, chevron = true, selected,
           aria-hidden
           className={cn(
             'grid size-10 shrink-0 place-items-center rounded-lg [&_svg]:size-5',
-            selected ? 'bg-card text-brand-ink' : 'bg-muted text-foreground',
+            selected ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground',
           )}
         >
           <IconWeight weight={selected ? 'fill' : 'regular'}>{icon}</IconWeight>
@@ -316,11 +337,11 @@ export function SwitchRow({ label, description, icon, checked, onCheckedChange }
   )
 }
 
-/** Empty state: card tile, brand-subtle circle with a duotone icon, one line each, one secondary action. */
+/** Empty state: card tile, muted circle with a duotone icon, one line each, one secondary action. */
 export function EmptyState({ icon, title, body, action }: { icon: ReactNode; title: string; body: string; action?: ReactNode }) {
   return (
     <div className="flex flex-col items-center rounded-2xl border border-border bg-card px-6 py-8 text-center">
-      <span aria-hidden className="grid size-12 place-items-center rounded-full bg-brand-subtle text-brand-ink [&_svg]:size-6">
+      <span aria-hidden className="grid size-12 place-items-center rounded-full bg-muted text-foreground [&_svg]:size-6">
         <IconWeight weight="duotone">{icon}</IconWeight>
       </span>
       <p className="title-3 mt-3">{title}</p>

@@ -25,7 +25,7 @@ export interface LegendSpec {
 export interface LayerDef<TData = unknown> {
   id: string
   label: string
-  /** lucide-react icon name. */
+  /** Phosphor icon name (`@phosphor-icons/react`). */
   icon: string
   /** Hidden entirely (toggle included) unless the backend serves this. */
   requires?: CapabilityKey

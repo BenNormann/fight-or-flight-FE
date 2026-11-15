@@ -254,7 +254,7 @@ function SearchTrailingAction({
   )
 }
 
-/** Overlay placeholder: each character fades in with a short stagger (re-mounted via `animateKey`). */
+/** Overlay placeholder: each character fades in with a short stagger (re-mounted via `animateKey`). Text is foreground/70 (AA on card in both themes). */
 function AnimatedPlaceholder({
   text,
   animateKey,
@@ -284,7 +284,7 @@ function AnimatedPlaceholder({
   return (
     <motion.span
       animate="visible"
-      className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-muted-foreground"
+      className="pointer-events-none absolute inset-y-0 left-0 flex items-center text-foreground/70"
       initial="hidden"
       key={animateKey}
       variants={{
@@ -462,6 +462,8 @@ export function HaloSearchInput({
             className={cn(
               "h-full min-h-12 w-full bg-transparent text-base text-foreground outline-none",
               "caret-foreground",
+              /* One clear control: hide the native search cancel button (the custom X stays). */
+              "[&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none",
               (isDeleting || isLoading) && "text-transparent caret-transparent"
             )}
             disabled={disabled}

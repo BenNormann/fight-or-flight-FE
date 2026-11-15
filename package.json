@@ -34,7 +34,6 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "h3-js": "^4.5.0",
-    "lucide-react": "^1.72.0",
     "maplibre-gl": "^6.18.0",
     "motion": "^14.14.0",
     "pmtiles": "^4.5.0",

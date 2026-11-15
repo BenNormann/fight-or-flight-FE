@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { showPolishedToast } from '@/ui/vendor/halo-toast'
 
 export interface NotifyOptions {
   title: string
@@ -11,6 +10,7 @@ export interface NotifyOptions {
   id?: string
 }
 
-export function notify({ id, ...options }: NotifyOptions) {
-  return showPolishedToast({ ...options, id: id ?? options.title })
+/** Sonner loads on first use (and with the lazy Toaster), keeping it out of the first-paint bundle. */
+export function notify({ id, ...options }: NotifyOptions): void {
+  void import('@/ui/vendor/halo-toast').then(({ showPolishedToast }) => showPolishedToast({ ...options, id: id ?? options.title }))
 }

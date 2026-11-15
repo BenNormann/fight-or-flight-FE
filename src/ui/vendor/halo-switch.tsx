@@ -1,7 +1,7 @@
 /*
  * Cult `halo-switch`, adapted (docs/COMPONENTS.md, docs/DESIGN.md §3 switch row):
- * the frosted shell, underglow and magenta / purple / cyan gradients are removed
- * (chrome is monochrome plus brand). Track 40×24, no border, 1px inset `input`
+ * the frosted shell, underglow and magenta / purple / cyan gradients are removed.
+ * Switches live in sheets, so on is neutral `primary`, not brand. Track 40×24, no border, 1px inset `input`
  * ring when off. Thumb 16px, absolutely centred (`top-1/2 -translate-y-1/2`,
  * which uses the CSS `translate` property) and moved 16px by a motion
  * `transform`, so the two never fight. No layout measuring.
@@ -27,7 +27,7 @@ export function HaloSwitch({ className, ...rootProps }: HaloSwitchProps) {
         'relative inline-block h-6 w-10 shrink-0 cursor-pointer self-center rounded-full outline-none',
         'transition-colors duration-200',
         'data-unchecked:bg-muted data-unchecked:inset-ring data-unchecked:inset-ring-input',
-        'data-checked:bg-selected',
+        'data-checked:bg-primary',
         'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         'data-disabled:cursor-not-allowed data-disabled:opacity-50',
         className,
@@ -57,7 +57,7 @@ export function HaloSwitch({ className, ...rootProps }: HaloSwitchProps) {
               className={cn(
                 thumbClassName,
                 'pointer-events-none absolute top-1/2 left-1 block size-4 -translate-y-1/2 rounded-full transition-colors duration-200',
-                thumbState.checked ? 'bg-selected-foreground' : 'bg-input',
+                thumbState.checked ? 'bg-primary-foreground' : 'bg-input',
               )}
               style={thumbStyleSafe}
             />

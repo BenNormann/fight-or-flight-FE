@@ -2,6 +2,7 @@ import { BookmarkSimpleIcon, BuildingsIcon, MapPinSimpleIcon, NavigationArrowIco
 import { useState } from 'react'
 import { POI_LABEL, events, findBuilding, findPoi, findRoom, placeMeta, roomsIn } from '@/demo'
 import type { Building, Id, Poi, Room } from '@/domain'
+import { formatTime } from '@/lib/time'
 import { useAppStore } from '@/state/store'
 import {
   ActionBar,
@@ -15,7 +16,6 @@ import {
   Section,
   ViewHeader,
   dayLabel,
-  formatClock,
   notify,
   type ActionItem,
 } from '@/ui'
@@ -70,7 +70,7 @@ function BuildingDetail({ building }: { building: Building }) {
   return (
     <div data-testid="view-place">
       <ViewHeader
-        eyebrow={<span className="text-brand-ink">Building · <span className="font-mono">{building.code}</span></span>}
+        eyebrow={<>Building · <span className="font-mono">{building.code}</span></>}
         title={building.name}
         subtitle={
           <>
@@ -86,16 +86,18 @@ function BuildingDetail({ building }: { building: Building }) {
       <Section className="mt-6" title={`Rooms · ${building.floors ?? floors.length} floors`}>
         {floors.length ? (
           <>
-            <ChipRow label="Floors" className="-mx-gutter -mt-2 px-gutter py-2">
-              <Chip pressed={floor === null} onClick={() => setFloor(null)}>
-                All
-              </Chip>
-              {floors.map((f) => (
-                <Chip key={f} pressed={floor === f} onClick={() => setFloor(f)}>
-                  {f === 'G' ? 'Ground' : f === 'B1' ? 'Basement' : `Floor ${f}`}
+            <div className="mb-3">
+              <ChipRow label="Floors">
+                <Chip pressed={floor === null} onClick={() => setFloor(null)}>
+                  All
                 </Chip>
-              ))}
-            </ChipRow>
+                {floors.map((f) => (
+                  <Chip key={f} pressed={floor === f} onClick={() => setFloor(f)}>
+                    {f === 'G' ? 'Ground' : f === 'B1' ? 'Basement' : `Floor ${f}`}
+                  </Chip>
+                ))}
+              </ChipRow>
+            </div>
             {shown.map((r) => (
               <ListRow
                 key={r.id}
@@ -134,9 +136,9 @@ function BuildingDetail({ building }: { building: Building }) {
             <ListRow
               key={e.id}
               icon={<PlaceIcon type="event" />}
-              title={e.title}
+              title={<span className="block whitespace-normal line-clamp-2">{e.title}</span>}
               subtitle={dayLabel(e.start)}
-              meta={<span className="font-mono">{formatClock(e.start)}</span>}
+              meta={<span className="font-mono">{formatTime(e.start)}</span>}
               onClick={() => select({ kind: 'event', id: e.id })}
             />
           ))}
@@ -153,7 +155,7 @@ function RoomDetail({ room }: { room: Room }) {
   return (
     <div data-testid="view-place">
       <ViewHeader
-        eyebrow={<span className="text-brand-ink">Room · {room.floor === 'G' ? 'Ground floor' : `Floor ${room.floor}`}</span>}
+        eyebrow={`Room · ${room.floor === 'G' ? 'Ground floor' : `Floor ${room.floor}`}`}
         title={room.name}
         subtitle={building ? `In ${building.name}` : undefined}
         onBack={() => (building ? select({ kind: 'building', id: building.id }) : select(null))}
@@ -167,7 +169,7 @@ function RoomDetail({ room }: { room: Room }) {
         </div>
         <div>
           <p className="caption-4 text-muted-foreground">Capacity</p>
-          <p className="heading-5 font-mono text-brand-ink">{room.capacity ?? 'n/a'}</p>
+          <p className="heading-5 font-mono">{room.capacity ?? 'n/a'}</p>
         </div>
       </Card>
       {building ? (
@@ -207,7 +209,7 @@ function PoiDetail({ poi }: { poi: Poi }) {
     : common
   return (
     <div data-testid="view-place">
-      <ViewHeader eyebrow={<span className="text-brand-ink">{POI_LABEL[poi.type] ?? 'Place'}</span>} title={poi.name ?? POI_LABEL[poi.type] ?? 'Place'} subtitle={<Hours id={poi.id} />} onBack={back} />
+      <ViewHeader eyebrow={POI_LABEL[poi.type] ?? 'Place'} title={poi.name ?? POI_LABEL[poi.type] ?? 'Place'} subtitle={<Hours id={poi.id} />} onBack={back} />
       <ActionBar actions={actions} />
       {poi.type === 'blue_light' ? (
         <p className="body-6 mt-4 text-muted-foreground">Press the button on the pole to talk to campus police. The call box shares its location automatically.</p>

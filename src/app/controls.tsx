@@ -1,18 +1,15 @@
-import { ArrowLeftIcon, CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon } from '@phosphor-icons/react'
+import { CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon } from '@phosphor-icons/react'
 import { CATEGORIES } from '@/demo'
 import { cn } from '@/lib/cn'
 import { recenter, zoomIn, zoomOut } from '@/map/controller'
 import { useAppStore } from '@/state/store'
 import { Chip, ChipRow, IconButton, Keystone, SearchBar, CategoryIcon } from '@/ui'
 
-/** Search pill bound to the store. Typing searches live; the arrow leaves results. */
+/** Search pill bound to the store. Typing searches live; the results view's own header has the back arrow. */
 export function MapSearch({ overMap = true, trailing }: { overMap?: boolean; trailing?: React.ReactNode }) {
   const query = useAppStore((s) => s.query)
   const category = useAppStore((s) => s.category)
-  const view = useAppStore((s) => s.view)
   const search = useAppStore((s) => s.search)
-  const back = useAppStore((s) => s.back)
-  const inResults = view === 'search'
   return (
     <SearchBar
       placeholder="Search University Park campus"
@@ -20,7 +17,6 @@ export function MapSearch({ overMap = true, trailing }: { overMap?: boolean; tra
       overMap={overMap}
       onValueChange={(q) => search(q, q ? null : category)}
       onSubmit={(q) => search(q, category)}
-      leading={inResults ? <IconButton className="-ml-3" label="Back to explore" icon={<ArrowLeftIcon />} onClick={back} /> : undefined}
       trailing={trailing}
     />
   )

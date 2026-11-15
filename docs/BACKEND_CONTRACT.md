@@ -1,60 +1,65 @@
 # Backend contract
 
-**Status: endpoint list supplied by the product owner on 2026-11-14. Paths and purposes only.**
-Response shapes, base URL, auth and parameter formats are NOT known yet. Nothing here has been checked against a running backend. Do not write adapters from guesses: wait for sample responses.
+**Status: read from backend source on 2026-11-14.** Repo `RithvikR1218/fight-or-flight-BE`, branch `backend-setup` (HEAD `f8d2f98`, not merged; `main` has only a README). Shapes come from handler code, not from a running server: nothing was executed, and the backend declares no response schemas. Re-sync when that branch merges or changes.
 
-The backend is a data-ingestion and ML-feature API over H3 cells. It is not (yet) a map-app API.
+## Setup
 
-## Served (as described by the backend team)
+- Flask 3 + flask-smorest, PostgreSQL/PostGIS/TimescaleDB. Local: `docker compose` → API on port **5000**.
+- Prefix **`/api/v1`**. CORS: any origin on `/api/*`. No auth for reads.
+- OpenAPI at `/api/openapi.json`, Swagger UI at `/api/docs` (parameters documented, response bodies not).
+- `bbox` = `minLng,minLat,maxLng,maxLat`. Times ISO-8601, UTC by default.
+- H3 resolution 9 for crime, streetlights, buildings, features (6,909 cells); resolution 6 for sun and weather (30 cells).
 
-| Method | Path | Purpose | FE use |
-|---|---|---|---|
-| GET | `/health` | DB status, last successful run per ingestor | Reachability check; data freshness label |
-| GET | `/cells?bbox=` | H3 cells with static features | Cell grid for map layers |
-| GET | `/observations?cells=&bbox=&metric=&from=&to=&bucket=1m\|10m\|1h` | Time-bucketed observations | History for a tapped cell (chart) |
-| GET | `/observations/latest?bbox=&metric=` | Latest value per cell | Live hex layer per metric |
-| GET | `/incidents?bbox=&from=&to=&category=` | Crime points | Incident pins / list |
-| GET | `/features?bbox=&from=&to=&bucket=10m` | ML feature matrix per (h3_cell, bucket); JSON, or `?format=csv\|parquet` | None. Training data, not for the app |
-| GET | `/buildings.pmtiles` | 3D building tiles (static, range requests) | Building footprints / extrusions via the `pmtiles` protocol |
-| GET | `/sources` | Ingestion sources, intervals, last run times | Optional "data sources" info |
-| POST | `/admin/ingest/{source}` | Manually trigger an ingestor | **Never called by the FE** |
+## Endpoints (all under `/api/v1`, all implemented)
 
-Notes:
-- Paths have no `/api` prefix. The dev proxy and `apiFetch` paths must change once the base URL is known.
-- There is no config endpoint. Bounds, centre and basemap must come from FE env/defaults; capabilities must be inferred (for example from `/health` or `/sources`).
+| Method & path | Response (per item) | FE use |
+|---|---|---|
+| `GET /health` | `{status, db, ingestors: [{source, status, started_at, finished_at, rows, error}]}` | Reachability, data freshness |
+| `GET /cells?bbox&format=json\|geojson` | `{cell, parent_r6, building_count, avg_height_m, streetlight_count, road_length_m, lit_road_length_m, intersection_count}` | Hex grid; lighting layer (lit road share, streetlights) |
+| `GET /observations?cells&bbox&metric&source&from&to&bucket=raw\|1m\|10m\|1h` | raw: `{t, h3_cell, source, metric, value}`; bucketed adds `avg/min/max/n` (`last` for 10m, 1h). Default window 1h, bucket 10m | Cell history |
+| `GET /observations/latest?bbox&metric` | latest value per cell (last 24h) | Live per-metric layer |
+| `GET /observations/metrics` | metrics seen in the last 7d | Layer list |
+| `GET /incidents?bbox&cells&category&severity=1\|2&from&to` | `{source, external_id, ts, lat, lng, h3_cell, category, crime_code, severity}`; default 30d | Incident pins and list |
+| `GET /incidents/hourly` | `{bucket, h3_cell, n}` (ignores bbox and severity) | Incident counts per cell |
+| `GET /features?bbox\|cells&from&to&format=json\|csv\|parquet` | ML feature rows per `(h3_cell, bucket)` | None (training data) |
+| `GET /buildings.pmtiles` | PMTiles, **404 until built**. Layer `buildings`, zoom 10 to 16, only attribute **`height_m`** (4 m default) | Extruded buildings via MapLibre + `pmtiles` |
+| `GET /buildings?bbox` (bbox required) | GeoJSON; props `height_m, elev_m, h3_cell` | Building detail / fallback footprints |
+| `GET /roads?bbox` (bbox required) | GeoJSON; props `u, v, key, name, highway, lit, sidewalk, length_m, h3_cell` | Lit / unlit streets layer |
+| `GET /roads/graph?part=edges\|nodes&format=parquet\|csv\|json` | road graph; JSON capped at 100,000 rows | None (routing input) |
+| `GET /sources` | `[{name, description, enabled, interval_minutes, last_run}]` | Data sources info |
+| `POST /admin/ingest/{source}` | ingest run status | **Never called by the FE** |
+
+Metrics: `sun_altitude_deg`, `is_dark`, `temp_c`, `humidity_pct`, `precip_mm`, `cloud_cover_pct`, `wind_speed_kmh`, `visibility_m`, `streetlight_outages_open` (off unless configured). Incident `category` is free text from LAPD data, not an enum.
+
+Buildings: 969,395 LA County footprints (LARIAC 2020) within ~16 km (10 miles) of campus. **No names, codes or ids**: buildings are anonymous shapes with a height.
 
 ## Not served (gaps against v1 product scope)
 
-| Product feature | Needs | Status |
-|---|---|---|
-| Risk heatmap with "why" breakdown | A risk score (0 to 1) per cell with factors | **Gap.** Only raw observations and ML features are served. The FE must not compute risk. Could show a raw metric per cell instead |
-| Safe routing (safest vs fastest) | A route endpoint | **Gap.** Blocks the directions feature |
-| Search | A search endpoint or a searchable building list | **Gap** |
-| Building details, floors, rooms | Building attributes and room lists as JSON | **Gap.** Buildings exist only as tiles; attributes inside the tiles are unknown |
-| POIs (blue lights, DPS, entrances, bike racks, seating) | A POI endpoint | **Gap** (some may be static features of `/cells`) |
-| Events | An events endpoint | **Gap** |
-| Basemap | Streets/labels tiles | **Gap.** Only building tiles are served; the FE needs its own basemap source |
+| Product feature | Status |
+|---|---|
+| Risk score per cell with factors | **Gap.** Branch `algorithm-init` has an XGBoost crime-risk model and plans `GET /hotzones?hour`, `GET /score?lat&lng&hour`; not implemented. FE must not compute risk |
+| Safe routing | **Gap.** `GET /route` is planned in `algorithm-init`, not implemented |
+| Building names, codes, floors, rooms | **Gap.** No campus building identity anywhere in the API |
+| Search | **Gap** (nothing to search without named places) |
+| POIs (blue lights, DPS, bike racks, seating) | **Gap.** `algorithm-init` references a blue-light CSV that is not in the repo |
+| Events | **Gap** |
+| Basemap (streets, labels) | **Gap.** FE supplies its own basemap; `/roads` could draw streets but has no labels or land use |
+| Config endpoint (bounds, centre) | **Gap.** FE uses env/defaults |
 
 ## Open questions for the backend team
 
-1. Base URL (dev and prod), and is there auth or CORS setup?
-2. One sample response per endpoint (`/cells`, `/observations/latest`, `/incidents`, `/health`, `/sources`).
-3. `bbox` format (`west,south,east,north`?), time format, and the H3 resolution(s) of cells.
-4. The list of `metric` names and incident `category` values.
-5. `buildings.pmtiles`: layer name(s), zoom range, and attributes per building (id, name, code, height, floors?).
-6. Is a served risk score planned (model inference output per cell), and a routing endpoint? If not, who owns them?
-7. Are rooms, POIs, events and search planned in this API, or should they come from elsewhere?
-8. Is there an OpenAPI spec (FastAPI-style `/openapi.json`)?
+1. Is `buildings.pmtiles` built on the shared dev backend, and what is the dev base URL?
+2. Will campus building identity (name, code, entrances) and rooms come from this API or elsewhere?
+3. Timeline and response shapes for `/score`, `/hotzones` and `/route`.
+4. Will POIs (blue lights) and events be served?
+5. Can response schemas be declared so `/api/openapi.json` documents the bodies?
 
-## Formats the adapters will accept (when shapes are known)
+## FE status
 
-| Data | Accepted |
-|---|---|
-| Cells / per-cell values | H3 cell ids with values, or GeoJSON polygons |
-| Incidents | GeoJSON points, or JSON with lat/lng |
-| Buildings | PMTiles vector layer (served), GeoJSON, or plain JSON |
-| Route geometry (if ever served) | GeoJSON LineString, encoded polyline, or H3 cell list |
+- No adapter matches this API yet. The existing `config` adapter, fixture and mock handler follow the FE's earlier proposal (`/api/config`) and are obsolete; they stay only so the app boots in mock mode.
+- The dev proxy forwards `/api`, which already covers `/api/v1`.
 
 ## History
 
-- 2026-11-14: replaced the FE's original proposal (config, buildings, rooms, search, pois, risk, route, events under `/api`) with the backend's actual endpoint list. The existing `config` adapter, fixture and mock handler follow the old proposal and are now obsolete; they stay only so the app boots in mock mode until real samples arrive.
+- 2026-11-14 (a): FE proposal replaced by the endpoint list supplied by the product owner.
+- 2026-11-14 (b): synced from backend source (`backend-setup`): added the `/api/v1` prefix, response shapes, `/buildings`, `/roads`, `/roads/graph`, `/observations/metrics`, `/incidents/hourly`, PMTiles layer details, and planned endpoints from `algorithm-init`.

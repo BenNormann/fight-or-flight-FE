@@ -70,14 +70,27 @@ export const useAppStore = create<AppState>()((set) => ({
         ? { selection, view: viewFor(selection), sheetSnap: 'half', panelOpen: true }
         : { selection: null, view: 'explore', sheetSnap: 'peek' },
     ),
-  openView: (view) => set({ view, sheetSnap: view === 'explore' ? 'peek' : 'half', panelOpen: true }),
+  openView: (view) =>
+    set(view === 'explore' ? { view, selection: null, sheetSnap: 'peek', panelOpen: true } : { view, sheetSnap: 'half', panelOpen: true }),
   setSheetSnap: (sheetSnap) => set({ sheetSnap }),
   setPanelOpen: (panelOpen) => set({ panelOpen }),
   search: (query, category = null) =>
-    set({ query, category, view: query || category ? 'search' : 'explore', sheetSnap: 'half', panelOpen: true }),
-  directionsTo: (destination) => set({ destination, view: 'directions', sheetSnap: 'half', panelOpen: true }),
-  setTravelMode: (travelMode) => set({ travelMode }),
-  setRouteKind: (routeKind) => set({ routeKind }),
+    set(
+      query || category
+        ? { query, category, view: 'search', sheetSnap: 'half', panelOpen: true }
+        : { query, category, view: 'explore', selection: null, sheetSnap: 'peek', panelOpen: true },
+    ),
+  // A started route belongs to one destination, mode and kind: changing any of them ends it.
+  directionsTo: (destination) =>
+    set((s) => ({
+      destination,
+      view: 'directions',
+      sheetSnap: 'half',
+      panelOpen: true,
+      activeRouteId: destination === s.destination ? s.activeRouteId : null,
+    })),
+  setTravelMode: (travelMode) => set((s) => (travelMode === s.travelMode ? {} : { travelMode, activeRouteId: null })),
+  setRouteKind: (routeKind) => set((s) => (routeKind === s.routeKind ? {} : { routeKind, activeRouteId: null })),
   startRoute: (activeRouteId) => set({ activeRouteId, sheetSnap: 'peek' }),
   endRoute: () => set({ activeRouteId: null }),
   setLeaveAt: (leaveAt) => set({ leaveAt }),

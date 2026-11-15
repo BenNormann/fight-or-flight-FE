@@ -1,7 +1,8 @@
 import { CalendarDotsIcon, NavigationArrowIcon, ShieldCheckIcon } from '@phosphor-icons/react'
 import { buildings, events, placeMeta } from '@/demo'
+import { formatTime } from '@/lib/time'
 import { useAppStore } from '@/state/store'
-import { ActionBar, ListRow, PlaceIcon, Section, ViewHeader, dayLabel, formatClock } from '@/ui'
+import { ActionBar, ListRow, PlaceIcon, Section, ViewHeader, dayLabel } from '@/ui'
 
 /** Home view: what the sheet peeks with, and the desktop panel's default. */
 export default function ExploreView() {
@@ -15,7 +16,7 @@ export default function ExploreView() {
   return (
     <div data-testid="view-explore">
       <ViewHeader
-        eyebrow={<span className="text-brand-ink">USC · Sample campus</span>}
+        eyebrow="USC · Sample campus"
         title="Explore University Park"
         subtitle={
           <>
@@ -61,9 +62,9 @@ export default function ExploreView() {
           <ListRow
             key={e.id}
             icon={<PlaceIcon type="event" />}
-            title={e.title}
+            title={<span className="block whitespace-normal line-clamp-2">{e.title}</span>}
             subtitle={[dayLabel(e.start), e.location].filter(Boolean).join(' · ')}
-            meta={<span className="font-mono">{formatClock(e.start)}</span>}
+            meta={<span className="font-mono">{formatTime(e.start)}</span>}
             onClick={() => select({ kind: 'event', id: e.id })}
           />
         ))}

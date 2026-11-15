@@ -100,7 +100,8 @@ export function HaloSegmented({
               "outline-none transition-colors duration-200",
               "focus-visible:outline-2 focus-visible:outline-ring",
               "disabled:pointer-events-none disabled:opacity-50",
-              "hover:text-foreground aria-pressed:text-selected-foreground"
+              "hover:text-foreground",
+              translucent ? "aria-pressed:text-selected-foreground" : "aria-pressed:text-primary-foreground"
             )}
             disabled={item.disabled}
             key={item.value}
@@ -109,7 +110,7 @@ export function HaloSegmented({
             {selected === item.value ? (
               <motion.span
                 aria-hidden
-                className="absolute inset-0 rounded-full bg-selected"
+                className={cn("absolute inset-0 rounded-full", translucent ? "bg-selected" : "bg-primary")}
                 layoutId={thumbId}
                 transition={reduceMotion ? { duration: 0 } : layoutSpring}
               />

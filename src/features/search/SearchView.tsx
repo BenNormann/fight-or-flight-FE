@@ -19,9 +19,9 @@ export default function SearchView() {
     <div data-testid="view-search">
       <ViewHeader
         eyebrow={
-          <span className="text-brand-ink">
+          <>
             <span className="font-mono">{results.length}</span> {results.length === 1 ? 'result' : 'results'}
-          </span>
+          </>
         }
         title={query ? `“${query}”` : (catLabel ?? 'Search')}
         subtitle={query && catLabel ? `In ${catLabel}` : undefined}
@@ -38,8 +38,7 @@ export default function SearchView() {
                   title={r.label}
                   subtitle={r.sublabel ?? kindLabel[r.kind]}
                   meta={kindLabel[r.kind]}
-                  aria-current={active || undefined}
-                  className={active ? 'bg-brand-subtle text-brand-subtle-foreground hover:bg-brand-subtle [&>span:first-child]:text-brand-ink' : undefined}
+                  selected={active}
                   onClick={() => select({ kind: r.kind, id: r.id })}
                 />
               </li>

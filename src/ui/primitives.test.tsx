@@ -1,7 +1,10 @@
-import { fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Button, Chip, ChipRow, SwitchRow } from './primitives'
+afterEach(cleanup)
+// jsdom has no layout: scrollIntoView is missing.
+Element.prototype.scrollIntoView ??= () => {}
 
 function ControlledSwitch({ onChange }: { onChange: (on: boolean) => void }) {
   const [on, setOn] = useState(false)
@@ -57,5 +60,53 @@ describe('Button', () => {
       </>,
     )
     expect(container.querySelectorAll('[data-slot="keystone"]')).toHaveLength(1)
+  })
+})
+
+describe('ChipRow scrolling', () => {
+  function row(onFood = vi.fn()) {
+    render(
+      <ChipRow label="Categories">
+        <Chip pressed={false} onClick={onFood}>Food</Chip>
+        <Chip pressed={false}>Study</Chip>
+        <Chip pressed={false}>Parking</Chip>
+      </ChipRow>,
+    )
+    return screen.getByRole('toolbar', { name: 'Categories' })
+  }
+
+  it('arrow keys, Home and End move focus between chips', () => {
+    const bar = row()
+    screen.getByRole('button', { name: 'Food' }).focus()
+    fireEvent.keyDown(bar, { key: 'ArrowRight' })
+    expect(screen.getByRole('button', { name: 'Study' })).toHaveFocus()
+    fireEvent.keyDown(bar, { key: 'End' })
+    expect(screen.getByRole('button', { name: 'Parking' })).toHaveFocus()
+    fireEvent.keyDown(bar, { key: 'ArrowRight' })
+    expect(screen.getByRole('button', { name: 'Parking' })).toHaveFocus()
+    fireEvent.keyDown(bar, { key: 'Home' })
+    expect(screen.getByRole('button', { name: 'Food' })).toHaveFocus()
+  })
+
+  it('a mouse drag past the threshold scrolls and does not press the chip; a plain click does', () => {
+    const onFood = vi.fn()
+    const bar = row(onFood)
+    bar.setPointerCapture = vi.fn()
+    bar.hasPointerCapture = vi.fn(() => true)
+    bar.releasePointerCapture = vi.fn()
+    const food = screen.getByRole('button', { name: 'Food' })
+
+    fireEvent.pointerDown(food, { pointerType: 'mouse', pointerId: 1, button: 0, clientX: 100 })
+    fireEvent.pointerMove(food, { pointerType: 'mouse', pointerId: 1, clientX: 60 })
+    fireEvent.pointerUp(food, { pointerType: 'mouse', pointerId: 1, clientX: 60 })
+    fireEvent.click(food)
+    expect(onFood).not.toHaveBeenCalled()
+    expect(bar.setPointerCapture).toHaveBeenCalled()
+
+    fireEvent.pointerDown(food, { pointerType: 'mouse', pointerId: 2, button: 0, clientX: 100 })
+    fireEvent.pointerMove(food, { pointerType: 'mouse', pointerId: 2, clientX: 102 })
+    fireEvent.pointerUp(food, { pointerType: 'mouse', pointerId: 2, clientX: 102 })
+    fireEvent.click(food)
+    expect(onFood).toHaveBeenCalledTimes(1)
   })
 })

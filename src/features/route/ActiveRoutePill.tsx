@@ -1,7 +1,8 @@
 import { NavigationArrowIcon, XIcon } from '@phosphor-icons/react'
 import { demoRoutes, placeOf } from '@/demo'
+import { formatTime } from '@/lib/time'
 import { useAppStore } from '@/state/store'
-import { StatusPill, arrivalTime, formatClock, formatDistance, formatDuration } from '@/ui'
+import { StatusPill, arrivalTime, formatDistance, formatDuration } from '@/ui'
 
 /** Shown while a route is active, on top of the map. */
 export default function ActiveRoutePill() {
@@ -26,7 +27,7 @@ export default function ActiveRoutePill() {
       detail={
         <>
           {route.kind === 'safest' ? 'Safest' : 'Fastest'} route · {formatDistance(route.distanceM)} · arrive{' '}
-          {formatClock(arrivalTime(route.durationS, leaveAt))}
+          {formatTime(arrivalTime(route.durationS, leaveAt))}
           <br />
           Head north on Trousdale Parkway, then turn right at Hahn Plaza.
         </>

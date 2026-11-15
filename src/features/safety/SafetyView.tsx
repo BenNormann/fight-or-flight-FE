@@ -1,7 +1,7 @@
 import { FlameIcon, FootprintsIcon, PathIcon, PhoneIcon, ShareNetworkIcon, ShieldCheckIcon, SirenIcon, UsersThreeIcon } from '@phosphor-icons/react'
-import { ORIGIN, pois, project } from '@/demo'
+import { ORIGIN, SAFETY_HEAT_LAYER, demoLayerDefaults, pois, project } from '@/demo'
 import { useAppStore } from '@/state/store'
-import { Card, ListRow, Section, ViewHeader, notify } from '@/ui'
+import { Card, ListRow, Section, SwitchRow, ViewHeader, notify } from '@/ui'
 
 /** Nearest emergency phone to the demo origin (a backend query later). */
 function nearestBlueLight() {
@@ -24,7 +24,7 @@ export default function SafetyView() {
   const directionsTo = useAppStore((s) => s.directionsTo)
   const setRouteKind = useAppStore((s) => s.setRouteKind)
   const toggleLayer = useAppStore((s) => s.toggleLayer)
-  const heatOn = useAppStore((s) => s.layerOverrides['demo-safety'] ?? false)
+  const heatOn = useAppStore((s) => s.layerOverrides[SAFETY_HEAT_LAYER] ?? demoLayerDefaults[SAFETY_HEAT_LAYER] ?? false)
   const blue = nearestBlueLight()
 
   return (
@@ -68,14 +68,12 @@ export default function SafetyView() {
           <ListRow icon={<PhoneIcon />} title="Nearest emergency phone" subtitle={blue.name} onClick={() => select({ kind: 'poi', id: blue.id })} />
         ) : null}
         <ListRow icon={<ShieldCheckIcon />} title="USC Department of Public Safety" subtitle="McClintock Ave, staffed 24 hours" onClick={() => select({ kind: 'poi', id: 'p-dps' })} />
-        <ListRow
+        <SwitchRow
           icon={<FlameIcon />}
-          title={heatOn ? 'Hide safety heat' : 'Show safety heat on the map'}
-          subtitle="Relative risk by area"
-          meta={heatOn ? 'On' : 'Off'}
-          chevron={false}
-          aria-pressed={heatOn}
-          onClick={() => toggleLayer('demo-safety', !heatOn)}
+          label="Safety heat on the map"
+          description="Relative risk by area"
+          checked={heatOn}
+          onCheckedChange={(on) => toggleLayer(SAFETY_HEAT_LAYER, on)}
         />
       </Section>
     </div>

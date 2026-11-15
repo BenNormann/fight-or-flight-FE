@@ -31,7 +31,11 @@ export function SidePanel({ open, onOpenChange, top, children, label }: SidePane
       transition={{ duration: reduce ? 0 : 0.5, ease: [0.22, 1, 0.36, 1] }}
     >
       <div
-        className="flex h-full w-full flex-col bg-card text-card-foreground shadow-overlay"
+        className={cn(
+          'flex h-full w-full flex-col bg-card text-card-foreground shadow-overlay',
+          // Once slid out, hide the panel so its shadow and any bleeding content leave no marks at the map edge.
+          open ? 'visible' : 'invisible transition-[visibility] delay-500 motion-reduce:delay-0',
+        )}
         inert={!open}
       >
         <div className="shrink-0 p-4 pb-2">{top}</div>
@@ -44,6 +48,8 @@ export function SidePanel({ open, onOpenChange, top, children, label }: SidePane
         aria-expanded={open}
         className={cn(
           'absolute top-1/2 -right-6 grid h-16 w-6 -translate-y-1/2 place-items-center rounded-r-lg bg-card text-muted-foreground shadow-float',
+          // 44px wide hit area around the 24px tab.
+          'after:absolute after:inset-y-0 after:-inset-x-2.5',
           'outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
         )}
       >

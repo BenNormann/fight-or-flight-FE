@@ -35,4 +35,37 @@ describe('store navigation', () => {
     useAppStore.getState().startRoute('r-safe')
     expect(useAppStore.getState()).toMatchObject({ activeRouteId: 'r-safe', sheetSnap: 'peek' })
   })
+
+  it('changing destination, travel mode or route kind ends the active route', () => {
+    const start = () => {
+      useAppStore.getState().directionsTo('b2')
+      useAppStore.getState().startRoute('r-safe')
+    }
+    start()
+    useAppStore.getState().directionsTo('b2')
+    expect(useAppStore.getState().activeRouteId).toBe('r-safe')
+    useAppStore.getState().directionsTo('b3')
+    expect(useAppStore.getState().activeRouteId).toBeNull()
+
+    start()
+    useAppStore.getState().setTravelMode('bike')
+    expect(useAppStore.getState().activeRouteId).toBeNull()
+
+    start()
+    useAppStore.getState().setRouteKind('fastest')
+    expect(useAppStore.getState().activeRouteId).toBeNull()
+  })
+
+  it('opening explore clears the selection and lowers the sheet', () => {
+    useAppStore.getState().select({ kind: 'building', id: 'b1' })
+    useAppStore.getState().openView('explore')
+    expect(useAppStore.getState()).toMatchObject({ view: 'explore', selection: null, sheetSnap: 'peek' })
+  })
+
+  it('un-pressing a category chip returns to explore at peek', () => {
+    useAppStore.getState().search('', 'food')
+    expect(useAppStore.getState()).toMatchObject({ view: 'search', sheetSnap: 'half' })
+    useAppStore.getState().search('', null)
+    expect(useAppStore.getState()).toMatchObject({ view: 'explore', sheetSnap: 'peek' })
+  })
 })

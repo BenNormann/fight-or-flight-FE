@@ -1,13 +1,15 @@
 /**
  * DEMO DATA. DELETE THIS FOLDER when the backend contract is known.
  *
- * SAMPLE DATA modelled loosely on USC University Park, typed with src/domain so views
- * and the placeholder map can be built before any adapter exists. Names, rooms,
- * hours and events are illustrative, not official USC information. Nothing here
- * is backend data, and nothing here may be imported by src/api.
+ * SAMPLE DATA placed at real coordinates around USC University Park (positions
+ * approximate), typed with src/domain so views and the map can be built before
+ * the backend serves places. Names, rooms, hours and events are illustrative,
+ * not official USC information. Nothing here is backend data, and nothing here
+ * may be imported by src/api.
  *
- * Coordinates: the placeholder map is a 1600×1600 px plane at roughly 1 px per
- * metre. `project` / `unproject` convert between that plane and LngLat.
+ * `project` / `unproject` convert between LngLat and local metres (x east,
+ * y south) on a 1600 m square around the campus centre, for distances and
+ * route shapes.
  */
 import type {
   Building,
@@ -21,21 +23,26 @@ import type {
   RouteSegment,
   SearchResult,
 } from '@/domain'
+import { formatHour as t } from '@/lib/time'
 
 export const PLANE = 1600
-const CENTER: LngLat = [-118.2851, 34.0224]
+/** Campus centre, USC University Park. */
+export const CAMPUS_CENTER: LngLat = [-118.2851, 34.0224]
 const M_PER_DEG_LAT = 111_320
-const M_PER_DEG_LNG = M_PER_DEG_LAT * Math.cos((CENTER[1] * Math.PI) / 180)
+const M_PER_DEG_LNG = M_PER_DEG_LAT * Math.cos((CAMPUS_CENTER[1] * Math.PI) / 180)
 
 export function project([lng, lat]: LngLat): [x: number, y: number] {
-  return [PLANE / 2 + (lng - CENTER[0]) * M_PER_DEG_LNG, PLANE / 2 - (lat - CENTER[1]) * M_PER_DEG_LAT]
+  return [PLANE / 2 + (lng - CAMPUS_CENTER[0]) * M_PER_DEG_LNG, PLANE / 2 - (lat - CAMPUS_CENTER[1]) * M_PER_DEG_LAT]
 }
 export function unproject(x: number, y: number): LngLat {
-  return [CENTER[0] + (x - PLANE / 2) / M_PER_DEG_LNG, CENTER[1] - (y - PLANE / 2) / M_PER_DEG_LAT]
+  return [CAMPUS_CENTER[0] + (x - PLANE / 2) / M_PER_DEG_LNG, CAMPUS_CENTER[1] - (y - PLANE / 2) / M_PER_DEG_LAT]
 }
 
-/** Campus area on the plane; the procedural city leaves it empty. */
-export const CAMPUS_RECT = { x: 600, y: 400, w: 400, h: 540 }
+/** Move a point by metres (east, south). */
+const offset = (at: LngLat, east: number, south: number): LngLat => {
+  const [x, y] = project(at)
+  return unproject(x + east, y + south)
+}
 
 // ── Buildings ────────────────────────────────────────────────────────────────
 
@@ -43,43 +50,44 @@ interface BuildingSpec {
   id: Id
   code: string
   name: string
-  rect: [x: number, y: number, w: number, h: number]
+  /** Approximate centre. */
+  at: LngLat
+  /** Footprint width and depth in metres. */
+  size: [w: number, h: number]
   floors: number
   address: string
 }
 
 const buildingSpecs: BuildingSpec[] = [
-  { id: 'b-lib', code: 'DML', name: 'Doheny Memorial Library', rect: [632, 432, 124, 92], floors: 5, address: '3550 Trousdale Pkwy' },
-  { id: 'b-sci', code: 'SGM', name: 'Seeley G. Mudd Building', rect: [792, 428, 172, 84], floors: 4, address: '3620 McClintock Ave' },
-  { id: 'b-uni', code: 'TCC', name: 'Ronald Tutor Campus Center', rect: [648, 576, 148, 104], floors: 3, address: '3607 Trousdale Pkwy' },
-  { id: 'b-eng', code: 'RTH', name: 'Ronald Tutor Hall', rect: [840, 560, 124, 128], floors: 6, address: '3710 McClintock Ave' },
-  { id: 'b-art', code: 'DRC', name: 'Drama Center', rect: [632, 736, 116, 92], floors: 2, address: '1029 Childs Way' },
-  { id: 'b-rec', code: 'LRC', name: 'Lyon Recreation Center', rect: [800, 740, 164, 112], floors: 2, address: '1026 W 34th St' },
-  { id: 'b-gar', code: 'PSX', name: 'Royal Street Parking', rect: [672, 868, 152, 52], floors: 4, address: '3335 S Figueroa St' },
+  { id: 'b-lib', code: 'DML', name: 'Doheny Memorial Library', at: [-118.2837, 34.02016], size: [80, 60], floors: 5, address: '3550 Trousdale Pkwy' },
+  { id: 'b-sci', code: 'SGM', name: 'Seeley G. Mudd Building', at: [-118.2891, 34.0212], size: [70, 45], floors: 4, address: '3620 McClintock Ave' },
+  { id: 'b-uni', code: 'TCC', name: 'Ronald Tutor Campus Center', at: [-118.2863, 34.0203], size: [90, 70], floors: 3, address: '3607 Trousdale Pkwy' },
+  { id: 'b-eng', code: 'RTH', name: 'Ronald Tutor Hall', at: [-118.28985, 34.02], size: [60, 60], floors: 6, address: '3710 McClintock Ave' },
+  { id: 'b-art', code: 'DRC', name: 'Drama Center', at: [-118.288, 34.0226], size: [60, 45], floors: 2, address: '1029 Childs Way' },
+  { id: 'b-rec', code: 'LRC', name: 'Lyon Recreation Center', at: [-118.28835, 34.02415], size: [90, 70], floors: 2, address: '1026 W 34th St' },
+  { id: 'b-gar', code: 'PSX', name: 'Royal Street Parking', at: [-118.2812, 34.023], size: [110, 60], floors: 4, address: '3335 S Figueroa St' },
 ]
 
-function rectPolygon([x, y, w, h]: BuildingSpec['rect']) {
-  const ring = [unproject(x, y), unproject(x + w, y), unproject(x + w, y + h), unproject(x, y + h), unproject(x, y)]
+function rectPolygon(at: LngLat, [w, h]: [number, number]) {
+  const corner = (e: number, s: number) => offset(at, e, s)
+  const ring = [corner(-w / 2, -h / 2), corner(w / 2, -h / 2), corner(w / 2, h / 2), corner(-w / 2, h / 2), corner(-w / 2, -h / 2)]
   return { type: 'Polygon' as const, coordinates: [ring] }
 }
 
-export const buildings: Building[] = buildingSpecs.map((b) => {
-  const [x, y, w, h] = b.rect
-  return {
-    id: b.id,
-    code: b.code,
-    name: b.name,
-    footprint: rectPolygon(b.rect),
-    centroid: unproject(x + w / 2, y + h / 2),
-    floors: b.floors,
-    heightM: b.floors * 4,
-    address: b.address,
-    entrances: [
-      { id: `${b.id}-main`, lngLat: unproject(x + w / 2, y + h), name: 'Main entrance', accessible: true },
-      { id: `${b.id}-side`, lngLat: unproject(x, y + h / 2), name: 'West door' },
-    ],
-  }
-})
+export const buildings: Building[] = buildingSpecs.map((b) => ({
+  id: b.id,
+  code: b.code,
+  name: b.name,
+  footprint: rectPolygon(b.at, b.size),
+  centroid: b.at,
+  floors: b.floors,
+  heightM: b.floors * 4,
+  address: b.address,
+  entrances: [
+    { id: `${b.id}-main`, lngLat: offset(b.at, 0, b.size[1] / 2), name: 'Main entrance', accessible: true },
+    { id: `${b.id}-side`, lngLat: offset(b.at, -b.size[0] / 2, 0), name: 'West door' },
+  ],
+}))
 
 // ── Rooms ────────────────────────────────────────────────────────────────────
 
@@ -114,24 +122,19 @@ export const rooms: Room[] = roomRows.map(([buildingId, name, floor, type, capac
 
 // ── POIs ─────────────────────────────────────────────────────────────────────
 
-const poiAt = (id: Id, type: Poi['type'], x: number, y: number, name?: string): Poi => ({
-  id,
-  type,
-  name,
-  lngLat: unproject(x, y),
-})
+const poiAt = (id: Id, type: Poi['type'], lngLat: LngLat, name?: string): Poi => ({ id, type, name, lngLat })
 
 export const pois: Poi[] = [
-  poiAt('p-bl-1', 'blue_light', 776, 548, 'Blue light, Trousdale Pkwy'),
-  poiAt('p-bl-2', 'blue_light', 620, 712, 'Blue light, Childs Way'),
-  poiAt('p-bl-3', 'blue_light', 980, 720, 'Blue light, McClintock Ave'),
-  poiAt('p-bl-4', 'blue_light', 840, 896, 'Blue light, Royal St garage'),
-  poiAt('p-dps', 'dps', 980, 470, 'USC DPS, McClintock Ave station'),
-  poiAt('p-cafe-1', 'cafe', 700, 520, 'Literatea Cafe'),
-  poiAt('p-cafe-2', 'cafe', 1060, 640, 'Figueroa Noodle Bar'),
-  poiAt('p-park-1', 'parking', 748, 894, 'Royal St garage, levels 1 to 4'),
-  poiAt('p-park-2', 'parking', 560, 820, 'Lot 6, surface'),
-  poiAt('p-bike-1', 'bike_rack', 816, 704, 'Bike racks, Tutor Hall'),
+  poiAt('p-bl-1', 'blue_light', [-118.2852, 34.0215], 'Blue light, Trousdale Pkwy'),
+  poiAt('p-bl-2', 'blue_light', [-118.287, 34.0217], 'Blue light, Childs Way'),
+  poiAt('p-bl-3', 'blue_light', [-118.2896, 34.0228], 'Blue light, McClintock Ave'),
+  poiAt('p-bl-4', 'blue_light', [-118.2817, 34.0226], 'Blue light, Royal St garage'),
+  poiAt('p-dps', 'dps', [-118.28945, 34.0234], 'USC DPS, McClintock Ave station'),
+  poiAt('p-cafe-1', 'cafe', [-118.28345, 34.0203], 'Literatea Cafe'),
+  poiAt('p-cafe-2', 'cafe', [-118.282, 34.0208], 'Figueroa Noodle Bar'),
+  poiAt('p-park-1', 'parking', [-118.2815, 34.0233], 'Royal St garage, levels 1 to 4'),
+  poiAt('p-park-2', 'parking', [-118.2864, 34.019], 'Lot 6, surface'),
+  poiAt('p-bike-1', 'bike_rack', [-118.2895, 34.02025], 'Bike racks, Tutor Hall'),
 ]
 
 // ── Categories and place details ─────────────────────────────────────────────
@@ -154,17 +157,17 @@ export interface PlaceMeta {
 }
 
 export const placeMeta: Record<Id, PlaceMeta> = {
-  'b-lib': { categories: ['buildings', 'study'], hours: 'Open until 2:00', openNow: true, blurb: 'Grand reading room, quiet stacks upstairs and a cafe off the main hall.' },
-  'b-sci': { categories: ['buildings', 'study'], hours: 'Open until 22:00', openNow: true, blurb: 'Teaching labs and a large lecture hall on McClintock.' },
-  'b-uni': { categories: ['buildings', 'food'], hours: 'Open until 23:30', openNow: true, blurb: 'Food court, student services and the Trojan Grand Ballroom.' },
-  'b-eng': { categories: ['buildings', 'study'], hours: 'Card access after 19:00', openNow: true, blurb: 'Maker space in the basement, design studios upstairs.' },
-  'b-art': { categories: ['buildings'], hours: 'Open until 21:00', openNow: true, blurb: 'Rehearsal rooms and the Scene Dock Theatre.' },
-  'b-rec': { categories: ['buildings'], hours: 'Open until 23:00', openNow: true, blurb: 'Pool, courts and the climbing wall.' },
+  'b-lib': { categories: ['buildings', 'study'], hours: `Open until ${t(2)}`, openNow: true, blurb: 'Grand reading room, quiet stacks upstairs and a cafe off the main hall.' },
+  'b-sci': { categories: ['buildings', 'study'], hours: `Open until ${t(22)}`, openNow: true, blurb: 'Teaching labs and a large lecture hall on McClintock.' },
+  'b-uni': { categories: ['buildings', 'food'], hours: `Open until ${t(23, 30)}`, openNow: true, blurb: 'Food court, student services and the Trojan Grand Ballroom.' },
+  'b-eng': { categories: ['buildings', 'study'], hours: `Card access after ${t(19)}`, openNow: true, blurb: 'Maker space in the basement, design studios upstairs.' },
+  'b-art': { categories: ['buildings'], hours: `Open until ${t(21)}`, openNow: true, blurb: 'Rehearsal rooms and the Scene Dock Theatre.' },
+  'b-rec': { categories: ['buildings'], hours: `Open until ${t(23)}`, openNow: true, blurb: 'Pool, courts and the climbing wall.' },
   'b-gar': { categories: ['buildings', 'parking'], hours: 'Open 24 hours', openNow: true, blurb: '612 spaces. Pay by plate at level 1.' },
-  'p-cafe-1': { categories: ['food'], hours: 'Open until 21:00', openNow: true },
-  'p-cafe-2': { categories: ['food'], hours: 'Closes at 20:30', openNow: false },
+  'p-cafe-1': { categories: ['food'], hours: `Open until ${t(21)}`, openNow: true },
+  'p-cafe-2': { categories: ['food'], hours: `Closes at ${t(20, 30)}`, openNow: false },
   'p-park-1': { categories: ['parking'], hours: 'Open 24 hours', openNow: true },
-  'p-park-2': { categories: ['parking'], hours: 'Permit after 18:00', openNow: true },
+  'p-park-2': { categories: ['parking'], hours: `Permit after ${t(18)}`, openNow: true },
   'p-dps': { categories: ['safety'], hours: 'Staffed 24 hours', openNow: true },
   'p-bl-1': { categories: ['safety'] },
   'p-bl-2': { categories: ['safety'] },
@@ -242,8 +245,8 @@ export function demoSearch(query: string, category: string | null): SearchResult
 
 // ── Routes (fake backend output) ─────────────────────────────────────────────
 
-/** Where "Your location" sits on the demo plane: the south west campus gate. */
-export const ORIGIN: LngLat = unproject(612, 968)
+/** Where "Your location" sits: the Exposition Blvd gate at Trousdale Pkwy. */
+export const ORIGIN: LngLat = [-118.2852, 34.0187]
 
 const SPEED_MPS = { walk: 1.35, bike: 4.6, ride: 7.5 } as const
 export type DemoTravelMode = keyof typeof SPEED_MPS
@@ -291,25 +294,18 @@ export function demoRoutes(destination: Id | null, mode: DemoTravelMode): Route[
 
 // ── Map layers (demo toggles; real ones come from src/map/layers/registry) ───
 
-export const demoLayers = [
-  { id: 'demo-safety', label: 'Safety heat', description: 'Relative risk by area, from the backend' },
-  { id: 'demo-bluelights', label: 'Emergency phones', description: 'Blue light call boxes' },
-  { id: 'demo-events', label: 'Events', description: 'Happening in the next 48 hours' },
-  { id: 'demo-transit', label: 'Parking and bikes', description: 'Garages, lots and racks' },
-] as const
+/** Id of the safety heat toggle, for views that switch it on directly. */
+export const SAFETY_HEAT_LAYER = 'demo-safety'
 
-export const demoLayerDefaults: Record<string, boolean> = {
-  'demo-safety': false,
-  'demo-bluelights': true,
-  'demo-events': true,
-  'demo-transit': true,
-}
+export type DemoLayerIcon = 'heat' | 'phone' | 'events' | 'parking'
 
-/** Fake risk blobs for the safety heat toggle: [x, y, radius, score]. */
-export const demoRiskBlobs: [number, number, number, number][] = [
-  [560, 860, 110, 0.72],
-  [1080, 980, 140, 0.55],
-  [720, 640, 160, 0.12],
-  [900, 520, 120, 0.2],
-  [1180, 520, 120, 0.38],
+/** The one list of demo toggles. Views render it; nothing else names these ids. */
+export const demoLayers: readonly { id: string; label: string; description: string; icon: DemoLayerIcon; defaultOn: boolean }[] = [
+  { id: SAFETY_HEAT_LAYER, label: 'Safety heat', description: 'Relative risk by area, from the backend', icon: 'heat', defaultOn: false },
+  { id: 'demo-bluelights', label: 'Emergency phones', description: 'Blue light call boxes', icon: 'phone', defaultOn: true },
+  { id: 'demo-events', label: 'Events', description: 'Happening in the next 48 hours', icon: 'events', defaultOn: true },
+  { id: 'demo-transit', label: 'Parking and bikes', description: 'Garages, lots and racks', icon: 'parking', defaultOn: true },
 ]
+
+export const demoLayerDefaults: Record<string, boolean> = Object.fromEntries(demoLayers.map((l) => [l.id, l.defaultOn]))
+

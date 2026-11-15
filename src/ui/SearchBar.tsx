@@ -1,32 +1,47 @@
 import { MagnifyingGlassIcon } from '@phosphor-icons/react'
-import type { ReactNode } from 'react'
-import { HaloSearchInput } from '@/ui/vendor/halo-search'
+import { Suspense, lazy, type ReactNode } from 'react'
+import { cn } from '@/lib/cn'
+
+/** Lazy: the animated field is not needed for first paint; a static pill with the same box stands in. */
+const HaloSearchInput = lazy(() => import('@/ui/vendor/halo-search').then((m) => ({ default: m.HaloSearchInput })))
 
 export interface SearchBarProps {
   placeholder: string
   value: string
   onValueChange: (value: string) => void
   onSubmit: (query: string) => void
-  onFocusChange?: (focused: boolean) => void
   /** Replaces the search icon (e.g. a back button). */
   leading?: ReactNode
   /** e.g. a theme or profile button inside the pill. */
   trailing?: ReactNode
-  /** Solid surface inside the desktop panel; frosted over the map. */
+  /** Over the map: float shadow. Inside the desktop panel: border. */
   overMap?: boolean
 }
 
 /** Search pill. 16px input text so iOS never zooms. */
-export function SearchBar({
-  placeholder,
-  value,
-  onValueChange,
-  onSubmit,
-  onFocusChange,
-  leading,
-  trailing,
-  overMap = true,
-}: SearchBarProps) {
+export function SearchBar({ placeholder, value, onValueChange, onSubmit, leading, trailing, overMap = true }: SearchBarProps) {
+  const icon = leading ?? <MagnifyingGlassIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />
+  const fallback = (
+    <div
+      className={cn(
+        'relative flex min-h-tap items-center gap-2 rounded-full bg-card pr-1 pl-4',
+        overMap ? 'shadow-float' : 'border border-border',
+      )}
+    >
+      {icon}
+      <input
+        type="search"
+        enterKeyHint="search"
+        autoComplete="off"
+        aria-label={placeholder}
+        placeholder={placeholder}
+        value={value}
+        onChange={(e) => onValueChange(e.target.value)}
+        className="h-full min-h-12 min-w-0 flex-1 bg-transparent text-base text-foreground outline-none placeholder:text-foreground/70 [&::-webkit-search-cancel-button]:appearance-none"
+      />
+      {trailing}
+    </div>
+  )
   return (
     <form
       role="search"
@@ -36,20 +51,20 @@ export function SearchBar({
         onSubmit(value.trim())
       }}
     >
-      <HaloSearchInput
-        blobTranslucent={overMap}
-        enterKeyHint="search"
-        autoComplete="off"
-        aria-label={placeholder}
-        leading={leading ?? <MagnifyingGlassIcon aria-hidden className="size-5 shrink-0 text-muted-foreground" />}
-        onBlur={() => onFocusChange?.(false)}
-        onChange={(e) => onValueChange(e.target.value)}
-        onClear={() => onValueChange('')}
-        onFocus={() => onFocusChange?.(true)}
-        placeholder={placeholder}
-        trailing={trailing}
-        value={value}
-      />
+      <Suspense fallback={fallback}>
+        <HaloSearchInput
+          blobTranslucent={overMap}
+          enterKeyHint="search"
+          autoComplete="off"
+          aria-label={placeholder}
+          leading={icon}
+          onChange={(e) => onValueChange(e.target.value)}
+          onClear={() => onValueChange('')}
+          placeholder={placeholder}
+          trailing={trailing}
+          value={value}
+        />
+      </Suspense>
     </form>
   )
 }

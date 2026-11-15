@@ -14,11 +14,6 @@ export function formatDistance(metres: number): string {
   return `${(metres / 1000).toFixed(1)} km`
 }
 
-export function formatClock(iso: string | Date, locale?: string): string {
-  const d = typeof iso === 'string' ? new Date(iso) : iso
-  return d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' })
-}
-
 /** "Tonight", "Tomorrow", or a weekday, relative to `now`. */
 export function dayLabel(iso: string, now = new Date(), locale?: string): string {
   const d = new Date(iso)
