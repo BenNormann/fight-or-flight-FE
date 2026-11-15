@@ -84,14 +84,26 @@ function Needle({ bearing }: { bearing: number }) {
   )
 }
 
-/** Shows only while the map is rotated; the needle points north; tap resets. */
+/**
+ * Always shown in 3D (the mode that rotates), and whenever the map is turned. The needle points
+ * north. Tap while rotated: turn north. Tap again at north: back to the orientation before.
+ */
 function CompassButton() {
   const bearing = useSyncExternalStore(subscribeBearing, getBearing, () => 0)
-  if (Math.abs(bearing) < 0.5) return null
-  return <IconButton tone="float" label="Reset to north" icon={<Needle bearing={bearing} />} onClick={resetNorth} />
+  const rotates = useAppStore((s) => s.mapMode === '3d')
+  const north = Math.abs(bearing) < 0.5
+  if (north && !rotates) return null
+  return (
+    <IconButton
+      tone="float"
+      label={north ? 'Return to previous orientation' : 'Reset to north'}
+      icon={<Needle bearing={bearing} />}
+      onClick={resetNorth}
+    />
+  )
 }
 
-/** Right side map controls: compass (when rotated), layers, locate, the small safety shortcut, and (desktop) zoom. */
+/** Right side map controls: compass (3D, or when rotated), layers, locate, the small safety shortcut, and (desktop) zoom. */
 export function ControlStack({ className, zoom = false }: { className?: string; zoom?: boolean }) {
   const openView = useAppStore((s) => s.openView)
   const view = useAppStore((s) => s.view)

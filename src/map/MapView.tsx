@@ -197,7 +197,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   useEffect(() => {
     if (!map || !styleGen || buildingSrc === 'pending') return
     installLayers(map, buildingSrc === 'basemap' ? basemapBuildings(map.getStyle()) : pmtilesBuildings(buildingSrc))
-    applyMode(map, live.current.mapMode, 0)
+    // After a style (re)load: restore layers and handlers, but never the camera pose.
+    applyMode(map, live.current.mapMode, 0, true)
   }, [map, styleGen, buildingSrc])
 
   const routes = useMemo(
@@ -287,8 +288,12 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   }, [ready, map, styleGen, selectedId, theme])
 
   // ── Camera mode ──────────────────────────────────────────────────────────
+  const appliedMode = useRef<MapMode | null>(null)
   useEffect(() => {
-    if (ready && !swapping.current) applyMode(map, mapMode, ms)
+    if (!ready || swapping.current) return
+    const keepPose = appliedMode.current === mapMode
+    appliedMode.current = mapMode
+    applyMode(map, mapMode, ms, keepPose)
   }, [ready, map, mapMode, ms])
 
   // ── Padding and fit ──────────────────────────────────────────────────────
@@ -299,6 +304,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   )
   const fit = useMemo(() => fitPoints(routes, selection), [routes, selection])
   const framed = useRef(false)
+  const framedMode = useRef<MapMode | null>(null)
   useEffect(() => {
     if (!map || navLive) return
     const w = map.getContainer().clientWidth
@@ -311,7 +317,14 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     const box = target && bboxOf(target.points)
     const preset = cameraPresets[mapMode]
     // Ease to the mode's pitch and bearing too, so a mode change in the same render is not cancelled.
-    const pose = { pitch: preset.pitch, bearing: preset.rotate ? map.getBearing() || preset.bearing : preset.bearing }
+    // In a free-rotate mode (3D) the orientation is the user's: opening a sheet, a panel or a view
+    // must not turn or tilt the map. Only entering the mode applies its preset.
+    const entered = framedMode.current !== mapMode
+    framedMode.current = mapMode
+    const pose =
+      preset.rotate && !entered
+        ? { pitch: map.getPitch(), bearing: map.getBearing() }
+        : { pitch: preset.pitch, bearing: preset.rotate ? map.getBearing() || preset.bearing : preset.bearing }
     if (!box || !target) {
       map.easeTo({ padding: insets, ...pose, duration: ms })
       return
@@ -449,6 +462,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   }, [nav, navRoute, reduce, lockOn])
 
   // ── Commands from chrome ─────────────────────────────────────────────────
+  /** Bearing the user had before the compass turned the map north; the compass turns back to it. */
+  const beforeNorth = useRef<number | null>(null)
   useEffect(() => {
     if (!map) return
     return registerMapController({
@@ -456,7 +471,20 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       zoomBy: (d) => map.zoomTo(map.getZoom() + d, { duration: live.current.reduce ? 0 : 300 }),
       resetNorth: () => {
         const p = cameraPresets[live.current.mapMode]
-        map.easeTo({ bearing: p.rotate ? 0 : p.bearing, pitch: p.pitch, duration: live.current.reduce ? 0 : 500 })
+        const duration = live.current.reduce ? 0 : 500
+        if (!p.rotate) {
+          map.easeTo({ bearing: p.bearing, pitch: p.pitch, duration })
+          return
+        }
+        // Compass toggle. Rotated: remember where the user was and turn north (tilt untouched).
+        // Already north: turn back to the remembered orientation.
+        const bearing = map.getBearing()
+        if (Math.abs(bearing) >= 0.5) {
+          beforeNorth.current = bearing
+          map.easeTo({ bearing: 0, duration })
+        } else if (beforeNorth.current !== null) {
+          map.easeTo({ bearing: beforeNorth.current, duration })
+        }
       },
       followTraveller: () => {
         userAim.current = false
@@ -674,7 +702,7 @@ function arrowImage(color: string): ImageData {
 }
 
 /** Camera preset, interaction handlers, and building height (flat in 2D, extruded in Iso and 3D). */
-function applyMode(map: MlMap, mode: keyof typeof cameraPresets, duration: number) {
+function applyMode(map: MlMap, mode: keyof typeof cameraPresets, duration: number, keepPose = false) {
   const p = cameraPresets[mode]
   const rotate = p.rotate
   if (rotate) {
@@ -686,7 +714,8 @@ function applyMode(map: MlMap, mode: keyof typeof cameraPresets, duration: numbe
     map.touchZoomRotate.disableRotation()
     map.keyboard.disableRotation()
   }
-  map.easeTo({ pitch: p.pitch, bearing: rotate ? map.getBearing() || p.bearing : p.bearing, duration })
+  // `keepPose`: same mode as before (style reload, re-render). Free-rotate modes keep the user's orientation.
+  if (!(keepPose && rotate)) map.easeTo({ pitch: p.pitch, bearing: rotate ? map.getBearing() || p.bearing : p.bearing, duration })
   if (!map.getLayer('fof-buildings')) return
   // 2D: footprints only, no extrusion layer at all. Iso / 3D: footprints until the extrusion zoom.
   const flat = mode === '2d'
