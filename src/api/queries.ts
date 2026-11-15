@@ -4,12 +4,13 @@
  */
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
-import type { BBox, Id, LngLat, LocationFix, Place, RouteRequest, User } from '@/domain'
+import type { BBox, Id, LngLat, LocationFix, Place, RouteRequest, SimulatedIncident, User } from '@/domain'
 import { demoMode } from '@/lib/demoMode'
 import { env } from '@/lib/env'
 import { ApiError } from './client'
 import { fetchMe, logout } from './adapters/auth'
 import { fetchConfig } from './adapters/config'
+import { clearIncidents, fetchDemoIncidents, fetchDemoStatus, simulateIncident } from './adapters/demo'
 import { postLocation } from './adapters/location'
 import { fetchPlace, fetchPlaceCategories, reverseGeocode, searchPlaces } from './adapters/places'
 import { fetchRoutes } from './adapters/route'
@@ -26,6 +27,8 @@ export const queryKeys = {
   place: (id: Id) => ['places', 'detail', id] as const,
   placesInBox: (box: BBox, categories: string) => ['places', 'box', box, categories] as const,
   reverse: (at: LngLat) => ['places', 'reverse', at] as const,
+  demoStatus: ['demo', 'status'] as const,
+  demoIncidents: ['demo', 'incidents'] as const,
 }
 
 export function useAppConfig() {
@@ -81,9 +84,11 @@ export function useSignOut() {
 }
 
 /** Safe and fastest walking routes from the backend planner. `null` request or `enabled: false`: idle. */
-export function useRoutes(req: RouteRequest | null, enabled = true) {
+export function useRoutes(req: RouteRequest | null, enabled = true, keepPrevious = false) {
   return useQuery({
     queryKey: req ? queryKeys.routes(req) : ['routes', 'idle'],
+    // A started trip re-planned from where the traveller is (a reroute) keeps its route until the new one arrives.
+    ...(keepPrevious ? { placeholderData: keepPreviousData } : {}),
     queryFn: async ({ signal }) => {
       try {
         return await fetchRoutes(req!, signal)
@@ -305,4 +310,52 @@ export function useLiveLocation(optedIn: boolean): boolean {
   }, [active, client])
 
   return active
+}
+
+// ── Demo mode: simulated crimes (src/lib/demoMode.ts, backend /api/v1/demo/*) ─────────────────
+
+/** Whether the backend serves simulated crimes. Asked only in demo mode; an older backend (404) reads as off. */
+export function useDemoStatus() {
+  return useQuery({
+    queryKey: queryKeys.demoStatus,
+    queryFn: ({ signal }) => fetchDemoStatus(signal),
+    enabled: demoMode !== null,
+    staleTime: 60_000,
+    retry: false,
+  })
+}
+
+/** Active simulated crimes, polled while demo mode is on and the backend serves them. */
+export function useDemoIncidents() {
+  const served = useDemoStatus().data?.enabled === true
+  return useQuery({
+    queryKey: queryKeys.demoIncidents,
+    queryFn: ({ signal }) => fetchDemoIncidents(signal),
+    enabled: demoMode !== null && served,
+    refetchInterval: 3_000,
+    retry: false,
+  })
+}
+
+/** Simulate a crime. Planned routes are dropped from the cache, so the next plan avoids it. */
+export function useSimulateIncident() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: ({ at, category }: { at: LngLat; category?: string }) => simulateIncident(at, category),
+    onSuccess: (incident) => {
+      client.setQueryData<SimulatedIncident[]>(queryKeys.demoIncidents, (prev) => [incident, ...(prev ?? []).filter((i) => i.id !== incident.id)])
+      void client.invalidateQueries({ queryKey: ['routes'] })
+    },
+  })
+}
+
+export function useClearIncidents() {
+  const client = useQueryClient()
+  return useMutation({
+    mutationFn: clearIncidents,
+    onSuccess: () => {
+      client.setQueryData<SimulatedIncident[]>(queryKeys.demoIncidents, [])
+      void client.invalidateQueries({ queryKey: ['routes'] })
+    },
+  })
 }

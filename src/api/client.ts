@@ -38,7 +38,7 @@ export function apiUrl(path: string, query?: Query) {
  */
 export async function apiFetch(
   path: string,
-  opts: { query?: Query; body?: unknown; method?: 'GET' | 'POST'; signal?: AbortSignal } = {},
+  opts: { query?: Query; body?: unknown; method?: 'GET' | 'POST' | 'DELETE'; signal?: AbortSignal } = {},
 ): Promise<unknown> {
   let res: Response
   try {

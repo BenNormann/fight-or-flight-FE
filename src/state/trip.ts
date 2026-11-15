@@ -132,6 +132,16 @@ export function rerouteFrom(at: LngLat, onDone?: (outcome: RerouteOutcome) => vo
   return true
 }
 
+/**
+ * Re-plan a started trip from `at` (where the traveller is now) to the same destination. Used in demo mode
+ * when a simulated crime appears: the backend's next plan avoids it. Cleared when the trip ends.
+ */
+let rerouteAt: LngLat | null = null
+export function rerouteFrom(at: LngLat) {
+  rerouteAt = at
+  anchorListeners.forEach((l) => l())
+}
+
 export function useTrip(): Trip {
   const origin = useAppStore((s) => s.origin)
   const destination = useAppStore((s) => s.destination)
@@ -144,6 +154,13 @@ export function useTrip(): Trip {
   // Hold the start still while the user walks: every GPS fix would otherwise plan a new route.
   // Shared by every caller of this hook, so the map and the views always plan from the same point.
   const anchor = useSyncExternalStore(subscribeAnchor, () => anchorAt, () => anchorAt) ?? me
+  const reroute = useSyncExternalStore(subscribeAnchor, () => rerouteAt, () => rerouteAt)
+  useEffect(() => {
+    if (!started && rerouteAt) {
+      rerouteAt = null
+      anchorListeners.forEach((l) => l())
+    }
+  }, [started])
   useEffect(() => {
     if (!me || started) return
     if (anchorAt && distanceM(anchorAt, me) < REPLAN_AFTER_M) return
@@ -158,8 +175,9 @@ export function useTrip(): Trip {
   }, [origin, anchor, originPlace])
   const to = useTripPlace(destination)
 
-  const request = useMemo(() => (live && from && to ? { from: from.lngLat, to: to.lngLat, ...(leaveAt ? { at: leaveAt } : {}) } : null), [live, from, to, leaveAt])
-  const planned = useRoutes(request, live)
+  const start = started && reroute ? reroute : from?.lngLat
+  const request = useMemo(() => (live && start && to ? { from: start, to: to.lngLat, ...(leaveAt ? { at: leaveAt } : {}) } : null), [live, start, to, leaveAt])
+  const planned = useRoutes(request, live, started)
 
   // While a re-plan loads (or after it failed), keep the route being followed: it is still in the query cache.
   const pending = useSyncExternalStore(subscribeAnchor, getReroute, getReroute)

@@ -22,3 +22,24 @@ test('demo mode: no location prompt, the route walks itself to arrival', async (
   await expect(page.getByTestId('nav-sim-rate')).toHaveText('16×')
   await expect(page.getByTestId('maneuver-banner')).toContainText('You have arrived', { timeout: 60_000 })
 })
+
+test('demo page: simulate a crime near you, see it announced and listed, then clear it', async ({ page }) => {
+  await page.goto('/?demo')
+  await page.goto(`/login/dev?next=${encodeURIComponent('/')}`)
+  await page.getByTestId('dev-email').fill('trojan.dev@usc.edu')
+  await page.getByTestId('dev-sign-in').click()
+  await page.getByTestId('demo-open').click()
+  await expect(page.getByTestId('view-demo')).toBeVisible()
+  await expect(page.getByTestId('demo-status')).toContainText('Routes avoid 120 m')
+  await page.getByTestId('demo-crime-near').click()
+  await expect(page.getByText(/Robbery reported \d+ m away/)).toBeVisible({ timeout: 10_000 })
+  await expect(page.getByTestId('demo-incidents')).toContainText('Robbery')
+  await page.getByTestId('demo-clear').click()
+  await expect(page.getByTestId('demo-incidents')).toHaveCount(0)
+})
+
+test('no demo icon without ?demo', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByTestId('locate')).toBeVisible()
+  await expect(page.getByTestId('demo-open')).toHaveCount(0)
+})

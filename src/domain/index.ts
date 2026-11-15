@@ -321,3 +321,19 @@ export type Selection =
 
 export type MapMode = '2d' | 'iso' | '3d'
 export type SheetSnap = 'peek' | 'half' | 'full'
+
+/** Demo mode (`?demo`): a crime simulated through the backend's demo endpoints. Routes avoid `avoidRadiusM` around it. */
+export interface SimulatedIncident {
+  id: Id
+  lngLat: LngLat
+  category: string
+  at: IsoTime
+}
+
+export interface DemoStatus {
+  /** The backend runs with DEMO_MODE=true. */
+  enabled: boolean
+  ttlMinutes: number
+  avoidRadiusM: number
+  categories: string[]
+}

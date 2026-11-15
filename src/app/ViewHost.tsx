@@ -15,6 +15,7 @@ const views: Record<PanelView, ComponentType> = {
   events: lazy(() => import('@/features/events/EventsView')),
   layers: lazy(() => import('@/features/layers/LayersView')),
   safety: lazy(() => import('@/features/safety/SafetyView')),
+  demo: lazy(() => import('@/features/demo/DemoView')),
 }
 
 /** Skeleton shaped like a view: header, action row, three list rows. */
