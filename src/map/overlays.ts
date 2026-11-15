@@ -5,7 +5,7 @@
 import type { Feature, FeatureCollection, LineString, Point, Polygon } from 'geojson'
 // DEMO: sample places, routes and heat. Replace with adapters when the backend serves them.
 import { buildings, demoLayers, events, pois, type DemoLayerIcon } from '@/demo'
-import type { Id, LngLat, Poi, Route, Selection } from '@/domain'
+import type { Id, LngLat, Place, Poi, Route, Selection } from '@/domain'
 import { riskBand } from '@/lib/risk'
 import { aheadPieces, clip, splitAt } from './routeLine'
 
@@ -136,6 +136,21 @@ export function pinSpecs(origin: LngLat | null, selectedId: Id | null, isOn: (la
   for (const b of buildings)
     out.push({ key: b.id, lngLat: b.centroid, label: b.name, kind: 'building', type: 'building', selected: selectedId === b.id, selection: { kind: 'building', id: b.id } })
   return out.sort((a, b) => Number(a.selected) - Number(b.selected))
+}
+
+/** Pins for backend places (search results, the selected place). The selected one last, so it paints on top. */
+export function placePins(places: Place[], selectedId: Id | null): PinSpec[] {
+  return places
+    .map((p): PinSpec => ({
+      key: `place-${p.id}`,
+      lngLat: p.lngLat,
+      label: p.name,
+      kind: 'poi',
+      type: p.kind === 'building' ? 'building' : (p.category ?? 'place'),
+      selected: p.id === selectedId,
+      selection: { kind: 'place', id: p.id },
+    }))
+    .sort((a, b) => Number(a.selected) - Number(b.selected))
 }
 
 interface TripPinPlace {

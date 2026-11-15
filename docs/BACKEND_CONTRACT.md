@@ -60,7 +60,7 @@ Buildings: 969,395 LA County footprints (LARIAC 2020) within ~16 km (10 miles) o
 | Safe routing | **Served** (checked live 2026-11-14): see "Routing" below |
 | Turn-by-turn steps | **Gap.** Wanted with each route: `{maneuver, at: [lng, lat], offset_m, distance_m, name?}` (maneuver: depart, straight, slight/sharp left/right, left, right, u-turn, arrive). Until then the FE reads left / right off the line's shape (`src/lib/nav/steps.ts`), with no street names |
 | Building names, codes, floors, rooms | **Gap.** No campus building identity anywhere in the API |
-| Search | **Gap.** Requested: see "Search (requested)" below. The Google Maps places file (15,343 places) is in the backend repo but not loaded: `/pois` returns an empty list |
+| Search | **Served, no data loaded yet**: see "Search and places" below |
 | POIs (blue lights, DPS, bike racks, seating) | **Gap.** `algorithm-init` references a blue-light CSV that is not in the repo |
 | Events | **Gap** |
 | Basemap (streets, labels) | **Gap.** FE supplies its own basemap; `/roads` could draw streets but has no labels or land use |
@@ -81,16 +81,15 @@ Adapter: `src/api/adapters/route.ts` (`safe` -> `safest`, `shortest` -> `fastest
 - **Per-segment risk**: none, so the whole line is coloured by `mean_risk`. Wanted: risk per stretch of the line.
 - **Steps**: see the gaps table.
 
-## Search (requested, not in the backend)
+## Search and places (served; merged in RithvikR1218/fight-or-flight-BE#8)
 
-`GET /api/v1/search?q=&near=lat,lng&bbox=&category=&open_now=&limit=` -> `{ results: [{ id, kind: place|building|poi|address, name, category, address, lat, lng, distance_m?, rating?, review_count?, open_now? }] }`, best match first.
-Prefix and typo tolerant from one character (it runs per keystroke), matches name, category and aliases (building codes), ranks by match, then distance from `near`, then popularity. Empty `q` with `category` returns the nearest places in it.
+- `GET /api/v1/search?q=&near=lat,lng&bbox=&category=&open_now=&limit=` -> `{ results: [{ id, kind, name, category, subcategory, address, lat, lng, distance_m?, rating?, review_count?, open_now? }] }`, best match first. `q` or `category` is required (400 otherwise).
+- `GET /api/v1/search/categories` -> `[{ id, label, count, types: [{ id, label, count }] }]`. 18 categories plus `other`.
+- `GET /api/v1/places/{id}?near=` -> the result fields plus `hours` (`{ monday: [{ open, close, overnight?, all_day? }], ... }`, `[]` = closed, `null` = unknown), `hours_text`, `phone`, `website`, `photo_url`, `description`, `rating_breakdown`, `attributes`, `reviews`, `aliases`.
+- `GET /api/v1/geocode/reverse?at=lat,lng` -> `{ name, address, id, kind, distance_m }`; 404 when nothing named is near.
 
-`GET /api/v1/search/categories` -> `[{ id, label, count }]` (8 to 10 top-level groups over the Google types).
-`GET /api/v1/places/{id}` -> the result fields plus `hours`, `phone`, `website`, `photo_url`, `rating_breakdown`, `attributes`.
-Nice to have: `GET /api/v1/geocode/reverse?at=lat,lng` -> `{ name, address }` for points picked on the map.
-
-Until this exists the FE's search and place sheets run on `src/demo`.
+Adapter: `src/api/adapters/places.ts`. **Checked live 2026-11-14: the endpoints answer, but `/search` returns no results and `/search/categories` is `[]`** (the `places` table is not loaded on the hosted backend: `flask db upgrade`, then `python -m scripts.load_places`). Reverse geocoding does answer.
+The FE treats an empty category list as "places not loaded" and keeps `src/demo` for search, pins and Explore until it is non-empty; nothing needs redeploying on the FE when the data lands.
 
 ## Open questions for the backend team
 
@@ -137,3 +136,4 @@ The FE posts every 10 seconds while active (may drop to 5), only while signed in
 - 2026-11-14 (b): synced from backend source (`backend-setup`): added the `/api/v1` prefix, response shapes, `/buildings`, `/roads`, `/roads/graph`, `/observations/metrics`, `/incidents/hourly`, PMTiles layer details, and planned endpoints from `algorithm-init`.
 - 2026-11-14 (c): auth implemented on the backend (Google, USC only); contract updated from that code. Live location still proposed.
 - 2026-11-14 (d): `/route` is live and wired; search endpoints requested; `/api/config` fallback documented.
+- 2026-11-14 (e): search, categories, place detail and reverse geocode wired; hosted `places` table is still empty.

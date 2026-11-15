@@ -75,7 +75,7 @@ const USC: [number, number] = [-118.2851, 34.0224]
 export const LIVE_DEFAULT_CONFIG = {
   bounds: [USC[0] - 0.012, USC[1] - 0.008, USC[0] + 0.012, USC[1] + 0.008],
   center: USC,
-  features: ['auth', 'routing'],
+  features: ['auth', 'routing', 'search'],
 }
 
 export async function fetchConfig(signal?: AbortSignal): Promise<AppConfig> {

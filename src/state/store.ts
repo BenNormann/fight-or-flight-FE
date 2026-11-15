@@ -40,6 +40,8 @@ export interface AppState {
   nav: NavProgress | null
   /** Camera follows the traveller. Panning the map turns it off; the recenter control turns it on. */
   navFollowing: boolean
+  /** The user turned or tilted the map while following: position still follows, but not heading-up. */
+  navAimFree: boolean
   navCharacter: NavCharacterId
 
   setMapMode: (mode: MapMode) => void
@@ -63,6 +65,7 @@ export interface AppState {
   setLiveLocationOptIn: (on: boolean) => void
   setNav: (nav: NavProgress | null) => void
   setNavFollowing: (following: boolean) => void
+  setNavAimFree: (free: boolean) => void
   setNavCharacter: (id: NavCharacterId) => void
   /** Back one level: detail → explore. */
   back: () => void
@@ -75,7 +78,7 @@ const viewFor = (s: Selection): PanelView =>
 const homeView = (s: Pick<AppState, 'activeRouteId'>): PanelView => (s.activeRouteId ? 'navigation' : 'explore')
 
 /** Fields that end a started route. */
-const ended = { activeRouteId: null, nav: null, navFollowing: true } as const
+const ended = { activeRouteId: null, nav: null, navFollowing: true, navAimFree: false } as const
 
 export const useAppStore = create<AppState>()((set) => ({
   mapMode: '2d',
@@ -97,6 +100,7 @@ export const useAppStore = create<AppState>()((set) => ({
   liveLocationOptIn: false,
   nav: null,
   navFollowing: true,
+  navAimFree: false,
   navCharacter: 'chevron',
 
   setMapMode: (mapMode) => set({ mapMode }),
@@ -157,6 +161,7 @@ export const useAppStore = create<AppState>()((set) => ({
   setLiveLocationOptIn: (liveLocationOptIn) => set({ liveLocationOptIn }),
   setNav: (nav) => set({ nav }),
   setNavFollowing: (navFollowing) => set({ navFollowing }),
+  setNavAimFree: (navAimFree) => set((s) => (s.navAimFree === navAimFree ? {} : { navAimFree })),
   setNavCharacter: (navCharacter) => set({ navCharacter }),
   back: () =>
     set((s) => {

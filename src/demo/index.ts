@@ -293,10 +293,10 @@ function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode, from: LngL
   }
 }
 
-export function demoRoutes(destination: Id | null, mode: DemoTravelMode, from: LngLat = ORIGIN): Route[] {
-  const to = placeOf(destination)
+export function demoRoutes(destination: Id | null, mode: DemoTravelMode, from: LngLat = ORIGIN, at?: LngLat): Route[] {
+  const to = at ?? placeOf(destination)?.lngLat
   if (!to) return []
-  return [makeRoute('fastest', to.lngLat, mode, from), makeRoute('safest', to.lngLat, mode, from)]
+  return [makeRoute('fastest', to, mode, from), makeRoute('safest', to, mode, from)]
 }
 
 // ── Map layers (demo toggles; real ones come from src/map/layers/registry) ───

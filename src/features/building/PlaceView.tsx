@@ -4,6 +4,7 @@ import { POI_LABEL, events, findBuilding, findPoi, findRoom, placeMeta, roomsIn 
 import type { Building, Id, Poi, Room } from '@/domain'
 import { formatTime } from '@/lib/time'
 import { useAppStore } from '@/state/store'
+import { BusinessDetail } from './BusinessDetail'
 import {
   ActionBar,
   Button,
@@ -222,6 +223,7 @@ function PoiDetail({ poi }: { poi: Poi }) {
 export default function PlaceView() {
   const selection = useAppStore((s) => s.selection)
   const back = useAppStore((s) => s.back)
+  if (selection?.kind === 'place') return <BusinessDetail id={selection.id} />
   if (selection?.kind === 'building') {
     const b = findBuilding(selection.id)
     if (b) return <BuildingDetail building={b} />

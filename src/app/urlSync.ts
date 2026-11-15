@@ -16,6 +16,7 @@ export function pathFor(s: Pick<AppState, 'selection' | 'view' | 'destination'> 
     return qs ? `/route?${qs}` : '/route'
   }
   if (s.view === 'place' && s.selection?.kind === 'building') return `/b/${encodeURIComponent(s.selection.id)}`
+  if (s.view === 'place' && s.selection?.kind === 'place') return `/p/${encodeURIComponent(s.selection.id)}`
   if (s.view === 'place' && s.selection?.kind === 'room') return `/r/${encodeURIComponent(s.selection.id)}`
   return '/'
 }

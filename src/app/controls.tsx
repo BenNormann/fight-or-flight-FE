@@ -1,8 +1,8 @@
 import { CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon } from '@phosphor-icons/react'
 import { useSyncExternalStore } from 'react'
-import { CATEGORIES } from '@/demo'
 import { cn } from '@/lib/cn'
-import { getBearing, recenter, resetNorth, subscribeBearing, zoomIn, zoomOut } from '@/map/controller'
+import { followTraveller, getBearing, recenter, resetNorth, subscribeBearing, zoomIn, zoomOut } from '@/map/controller'
+import { useCategoryChips } from '@/state/places'
 import { useAppStore } from '@/state/store'
 import { Chip, ChipRow, IconButton, Keystone, SearchBar, CategoryIcon } from '@/ui'
 
@@ -50,11 +50,12 @@ export function CategoryChips({ className, overMap = true, bleed = true }: { cla
   const view = useAppStore((s) => s.view)
   const search = useAppStore((s) => s.search)
   const openView = useAppStore((s) => s.openView)
+  const chips = useCategoryChips()
   return (
     <ChipRow label="Categories" className={className} bleed={bleed}>
-      {CATEGORIES.map((c) => {
-        const opensView = c.id === 'events' || c.id === 'safety'
-        const pressed = opensView ? view === c.id : view === 'search' && category === c.id
+      {chips.map((c) => {
+        const opensView = c.view
+        const pressed = opensView ? view === opensView : view === 'search' && category === c.id
         return (
           <Chip
             key={c.id}
@@ -62,7 +63,7 @@ export function CategoryChips({ className, overMap = true, bleed = true }: { cla
             pressed={pressed}
             icon={<CategoryIcon id={c.id} />}
             onClick={() => {
-              if (opensView) openView(pressed ? 'explore' : (c.id as 'events' | 'safety'))
+              if (opensView) openView(pressed ? 'explore' : opensView)
               else search('', pressed ? null : c.id)
             }}
           >
@@ -107,6 +108,9 @@ function CompassButton() {
 export function ControlStack({ className, zoom = false }: { className?: string; zoom?: boolean }) {
   const openView = useAppStore((s) => s.openView)
   const view = useAppStore((s) => s.view)
+  // Navigating: this button brings the camera back onto the traveller, heading-up again in 3D.
+  const navigating = useAppStore((s) => s.activeRouteId !== null)
+  const offTraveller = useAppStore((s) => s.activeRouteId !== null && (!s.navFollowing || s.navAimFree))
   return (
     <div className={cn('pointer-events-none flex flex-col gap-2', className)}>
       <CompassButton />
@@ -119,9 +123,13 @@ export function ControlStack({ className, zoom = false }: { className?: string; 
       />
       <IconButton
         tone="float"
-        label="Show my location"
-        icon={<CrosshairIcon />}
-        onClick={recenter}
+        label={navigating ? 'Recenter on your position' : 'Show my location'}
+        data-testid="locate"
+        data-off-traveller={offTraveller || undefined}
+        // Free camera while navigating: the button stands out until the camera is back on the traveller.
+        className={offTraveller ? 'bg-selected! text-selected-foreground!' : undefined}
+        icon={<CrosshairIcon weight={offTraveller ? 'fill' : 'regular'} />}
+        onClick={navigating ? followTraveller : recenter}
       />
       <IconButton
         tone="float"

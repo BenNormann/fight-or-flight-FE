@@ -1,7 +1,7 @@
 import { Component, Suspense, lazy, useEffect, type CSSProperties, type ReactNode } from 'react'
 import { Outlet, useLocation } from 'react-router'
 import { useCapabilities } from '@/api/capabilities'
-import { useAppConfig, useLiveLocation } from '@/api/queries'
+import { useAppConfig, useLiveLocation, useLiveSearch } from '@/api/queries'
 import { cn } from '@/lib/cn'
 import { env } from '@/lib/env'
 import { useAppStore } from '@/state/store'
@@ -57,6 +57,7 @@ export function Shell() {
   const config = useAppConfig()
   const capabilities = useCapabilities()
   const served = Object.values(capabilities).filter(Boolean).length
+  const livePlaces = useLiveSearch()
   const snap = useAppStore((s) => s.sheetSnap)
   // Sign-in pages replace the chrome (sheet, panel, controls); the map stays mounted but inert underneath.
   const signingIn = isLoginPath(useLocation().pathname)
@@ -69,7 +70,7 @@ export function Shell() {
       {env.useMocks ? 'Mock backend' : 'Live backend'}
       {' · '}
       {config.isPending ? 'connecting…' : config.isError ? 'unreachable' : `${served} features served`}
-      {' · Demo campus data'}
+      {livePlaces ? null : ' · Demo campus data'}
     </p>
   )
 

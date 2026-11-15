@@ -14,6 +14,7 @@ import { instructionFor, navModel, type NavModel } from './navModel'
 function TripBar({ m }: { m: NavModel }) {
   const endRoute = useAppStore((s) => s.endRoute)
   const following = useAppStore((s) => s.navFollowing)
+  const aimFree = useAppStore((s) => s.navAimFree)
   const eta = new Date(useNow() + m.remainingS * 1000)
 
   return (
@@ -33,7 +34,7 @@ function TripBar({ m }: { m: NavModel }) {
           </>
         )}
       </div>
-      {!following && !m.arrived ? (
+      {(!following || aimFree) && !m.arrived ? (
         <IconButton
           tone="secondary"
           label="Recenter on you"

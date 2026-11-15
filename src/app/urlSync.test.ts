@@ -5,6 +5,7 @@ describe('pathFor', () => {
   it('maps building, room and directions states to routes', () => {
     expect(pathFor({ view: 'place', selection: { kind: 'building', id: 'b-lib' }, destination: null })).toBe('/b/b-lib')
     expect(pathFor({ view: 'place', selection: { kind: 'room', id: 'r-3' }, destination: null })).toBe('/r/r-3')
+    expect(pathFor({ view: 'place', selection: { kind: 'place', id: 'gmaps:Ch1' }, destination: null })).toBe('/p/gmaps%3ACh1')
     expect(pathFor({ view: 'directions', selection: null, destination: 'b-eng' })).toBe('/route?to=b-eng')
     expect(pathFor({ view: 'directions', selection: null, destination: null })).toBe('/route')
     expect(pathFor({ view: 'directions', selection: null, destination: 'b-eng', origin: 'pin:34.02000,-118.28000' })).toBe('/route?to=b-eng&from=pin%3A34.02000%2C-118.28000')

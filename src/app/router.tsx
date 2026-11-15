@@ -13,6 +13,7 @@ export const router = createBrowserRouter([
       { path: '/', element: <HomeFromUrl /> },
       { path: '/b/:buildingId', element: <SelectFromUrl kind="building" /> },
       { path: '/r/:roomId', element: <SelectFromUrl kind="room" /> },
+      { path: '/p/:placeId', element: <SelectFromUrl kind="place" /> },
       { path: '/route', element: <DirectionsFromUrl /> },
       // Sign-in pages cover the shell; the map stays mounted underneath.
       // Lazy: sign-in is off the first-paint path.

@@ -1,8 +1,9 @@
 import { CalendarDotsIcon, NavigationArrowIcon, ShieldCheckIcon } from '@phosphor-icons/react'
+import { usePlaceCategories } from '@/api/queries'
 import { buildings, events, placeMeta } from '@/demo'
 import { formatTime } from '@/lib/time'
 import { useAppStore } from '@/state/store'
-import { ActionBar, ListRow, PlaceIcon, Section, ViewHeader, dayLabel } from '@/ui'
+import { ActionBar, CategoryIcon, ListRow, PlaceIcon, Section, ViewHeader, dayLabel } from '@/ui'
 
 /** Home view: what the sheet peeks with, and the desktop panel's default. */
 export default function ExploreView() {
@@ -12,6 +13,36 @@ export default function ExploreView() {
   const search = useAppStore((s) => s.search)
   const openPlaces = buildings.filter((b) => placeMeta[b.id]?.openNow).slice(0, 5)
   const soon = [...events].sort((a, b) => a.start.localeCompare(b.start)).slice(0, 2)
+  // Real places from the backend: browse those, and leave the sample campus out.
+  const categories = usePlaceCategories().data ?? []
+
+  if (categories.length) {
+    const total = categories.reduce((n, c) => n + c.count, 0)
+    return (
+      <div data-testid="view-explore" data-live>
+        <ViewHeader
+          eyebrow="USC and nearby"
+          title="Explore University Park"
+          subtitle={
+            <>
+              <span className="font-mono">{total.toLocaleString()}</span> places to search
+            </>
+          }
+        />
+        <ActionBar
+          actions={[
+            { id: 'dir', label: 'Directions', icon: <NavigationArrowIcon weight="fill" />, primary: true, onClick: () => directionsTo(null) },
+            { id: 'safety', label: 'Safety', icon: <ShieldCheckIcon />, onClick: () => openView('safety') },
+          ]}
+        />
+        <Section className="mt-6" title="Browse nearby">
+          {categories.map((c) => (
+            <ListRow key={c.id} icon={<CategoryIcon id={c.id} />} title={c.label} meta={<span className="font-mono">{c.count.toLocaleString()}</span>} onClick={() => search('', c.id)} />
+          ))}
+        </Section>
+      </div>
+    )
+  }
 
   return (
     <div data-testid="view-explore">

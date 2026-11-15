@@ -18,6 +18,7 @@ import {
 const categoryIcon: Record<string, Icon> = {
   buildings: BuildingsIcon,
   food: ForkKnifeIcon,
+  cafe: CoffeeIcon,
   study: BookOpenIcon,
   parking: LetterCirclePIcon,
   events: CalendarDotsIcon,

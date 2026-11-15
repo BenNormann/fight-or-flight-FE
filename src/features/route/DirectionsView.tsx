@@ -13,8 +13,6 @@ import {
   WarningIcon,
 } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
-// DEMO: the place list until the backend serves search (docs/BACKEND_CONTRACT.md).
-import { demoSearch } from '@/demo'
 import type { Route } from '@/domain'
 import { cn } from '@/lib/cn'
 import { LOCATION_DENIED_HELP, requestLocation, useUserLocation } from '@/lib/geo/location'
@@ -22,6 +20,7 @@ import { requestCompassPermission } from '@/lib/nav/compass'
 import { riskBands } from '@/lib/risk'
 import { formatTime } from '@/lib/time'
 import { distanceText, durationText } from '@/lib/units'
+import { useEndSearch } from '@/state/places'
 import { useAppStore, type TravelMode, type TripEnd } from '@/state/store'
 import { YOUR_LOCATION, useTrip } from '@/state/trip'
 import {
@@ -113,9 +112,8 @@ function EndPicker({ end, onDone }: { end: TripEnd; onDone: () => void }) {
   const setPicking = useAppStore((s) => s.setPicking)
   const [q, setQ] = useState('')
   // Only places with a position can be an end of a route.
-  const places = demoSearch(q, null)
-    .filter((r) => r.lngLat && (r.kind === 'building' || r.kind === 'poi'))
-    .slice(0, 12)
+  const found = useEndSearch(q)
+  const places = found.results.filter((r) => r.lngLat).slice(0, 12)
   return (
     <Section className="mt-4" title={`Choose ${END_LABEL[end]}`}>
       <input
@@ -157,6 +155,7 @@ function EndPicker({ end, onDone }: { end: TripEnd; onDone: () => void }) {
           icon={<PlaceIcon type={r.kind === 'building' ? 'building' : 'poi'} />}
           title={r.label}
           subtitle={r.sublabel}
+          meta={r.meta ? <span className="font-mono">{r.meta}</span> : undefined}
           chevron={false}
           onClick={() => {
             setTripEnd(end, r.id)
@@ -164,7 +163,11 @@ function EndPicker({ end, onDone }: { end: TripEnd; onDone: () => void }) {
           }}
         />
       ))}
-      {places.length === 0 ? <p className="body-6 py-2 text-muted-foreground">No places match. Try "Choose on map".</p> : null}
+      {places.length === 0 && q.trim() ? (
+        <p className="body-6 py-2 text-muted-foreground" role="status">
+          {found.loading ? 'Searching…' : 'No places match. Try "Choose on map".'}
+        </p>
+      ) : null}
     </Section>
   )
 }

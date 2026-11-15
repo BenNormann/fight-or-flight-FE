@@ -17,6 +17,7 @@ import { env } from '@/lib/env'
 import { LOCATION_DENIED_HELP, getLocation, requestLocation } from '@/lib/geo/location'
 import { pinId } from '@/lib/pin'
 import { useAppStore } from '@/state/store'
+import { useMapPlaces } from '@/state/places'
 import { useMyPosition, useTrip } from '@/state/trip'
 import { Keystone, PlaceIcon, notify, useBreakpoint, useTheme, useViewportHeight } from '@/ui'
 import { DEV_FALLBACK_STYLE, buildMapStyle, type MapTheme } from './basemap'
@@ -37,10 +38,10 @@ import {
   cameraPresets,
 } from './camera'
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
-import { publishBearing, registerMapController } from './controller'
+import { followTraveller as resumeFollow, publishBearing, registerMapController } from './controller'
 import { chromeInsets } from './insets'
 import { installTouchTilt } from './touchTilt'
-import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, shownRoutes, tripPins, type PinSpec, type RiskPalette } from './overlays'
+import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, placePins, shownRoutes, tripPins, type PinSpec, type RiskPalette } from './overlays'
 
 /**
  * The ONLY map instance in the app: MapLibre GL over a basemap from config
@@ -78,6 +79,9 @@ const characterColors = (theme: MapTheme): CharacterColors =>
 /** Follow camera: north-up in 2D and Iso (their fixed bearing), heading-up in 3D. */
 const followBearing = (mode: MapMode, headingDeg: number) => (mode === '3d' ? headingDeg : cameraPresets[mode].bearing)
 
+/** A tap this close to the traveller counts as a tap on it (a finger, not a cursor). */
+const TRAVELLER_TAP_PX = 36
+
 /** Longest glide between two fixes; a longer gap jumps. */
 const NAV_GLIDE_MAX_MS = 1500
 const NAV_JUMP_AFTER_MS = 3000
@@ -114,6 +118,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   // The planned route stays drawn while the user changes the map view from the layers panel.
   const planning = useAppStore((s) => s.view === 'directions' || (s.view === 'layers' && s.layersOverDirections))
   const trip = useTrip()
+  const mapPlaces = useMapPlaces()
   const me = useMyPosition()
   const routeKind = useAppStore((s) => s.routeKind)
   const activeRouteId = useAppStore((s) => s.activeRouteId)
@@ -142,6 +147,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const on = (id: string) => overrides[id] ?? demoLayerDefaults[id] ?? false
   const heatOn = on(SAFETY_HEAT_LAYER)
   const selectedId = selection?.id ?? null
+  /** Real places are on the map: the sample campus pins step aside. */
+  const livePlaces = mapPlaces.live
   const ms = reduce ? 0 : CAMERA_MS
 
   // ── Create the one map ────────────────────────────────────────────────────
@@ -289,14 +296,15 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
 
   useEffect(() => {
     if (!ready || swapping.current) return
-    setData(map, 'fof-places', placeFeatures(selectedId))
+    // Sample footprints (tap targets) only while the places are sample data.
+    setData(map, 'fof-places', livePlaces ? EMPTY : placeFeatures(selectedId))
     map.setPaintProperty('fof-place-casing', 'line-color', cssVar('--background'))
     map.setPaintProperty('fof-place-ring', 'line-color', cssVar('--selected'))
     if (map.getLayer('fof-buildings')) {
       map.setPaintProperty('fof-buildings', 'fill-extrusion-color', cssVar('--map-building'))
       map.setPaintProperty('fof-buildings-flat', 'fill-color', cssVar('--map-building'))
     }
-  }, [ready, map, styleGen, selectedId, theme])
+  }, [ready, map, styleGen, selectedId, theme, livePlaces])
 
   // ── Camera mode ──────────────────────────────────────────────────────────
   const appliedMode = useRef<MapMode | null>(null)
@@ -313,7 +321,14 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     () => chromeInsets({ breakpoint, sheetSnap, panelOpen, routeActive, viewportW, viewportH }),
     [breakpoint, sheetSnap, panelOpen, routeActive, viewportW, viewportH],
   )
-  const fit = useMemo(() => fitPoints(routes, selection), [routes, selection])
+  const fit = useMemo(() => {
+    const known = fitPoints(routes, selection)
+    if (known) return known
+    // A backend place: frame it. A fresh list of results: frame the nearest few.
+    if (mapPlaces.selected) return { kind: 'place' as const, points: [mapPlaces.selected.lngLat] }
+    if (!selection && mapPlaces.places.length) return { kind: 'results' as const, points: mapPlaces.places.slice(0, 8).map((p) => p.lngLat) }
+    return null
+  }, [routes, selection, mapPlaces.selected, mapPlaces.places])
   const framed = useRef(false)
   const framedMode = useRef<MapMode | null>(null)
   useEffect(() => {
@@ -342,7 +357,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       map.easeTo({ padding: insets, ...pose, duration: ms })
       return
     }
-    const m = target.kind === 'route' ? { x: 32, y: 40 } : target.kind === 'campus' ? { x: 16, y: 16 } : { x: 104, y: 56 } // room for labels and pins
+    const m = target.kind === 'route' ? { x: 32, y: 40 } : target.kind === 'campus' ? { x: 16, y: 16 } : target.kind === 'results' ? { x: 40, y: 56 } : { x: 104, y: 56 } // room for labels and pins
     const padding = { top: insets.top + m.y + 44, bottom: insets.bottom + m.y, left: insets.left + m.x, right: insets.right + m.x }
     const cam = map.cameraForBounds(box, {
       padding,
@@ -393,6 +408,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
 
   useEffect(() => {
     userAim.current = false
+    useAppStore.getState().setNavAimFree(false)
   }, [navFollowing, mapMode])
 
   useEffect(() => {
@@ -415,7 +431,9 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       if (ev && !multiTouch && navOn()) useAppStore.getState().setNavFollowing(false)
     }
     const onAim = (e: { originalEvent?: unknown }) => {
-      if (e.originalEvent && navOn()) userAim.current = true
+      if (!e.originalEvent || !navOn()) return
+      userAim.current = true
+      useAppStore.getState().setNavAimFree(true)
     }
     const onMoveEnd = () => {
       // The moveend of our own jump must not snap again, or we would snap forever.
@@ -513,6 +531,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       },
       followTraveller: () => {
         userAim.current = false
+        useAppStore.getState().setNavAimFree(false)
         easeToTraveller.current(live.current.reduce ? 0 : CAMERA_MS)
       },
     })
@@ -525,6 +544,12 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       // Choosing a trip end on the map: any tap is the answer, even on a pin or a building.
       const s = useAppStore.getState()
       if (s.picking) return s.setTripEnd(s.picking, pinId([e.lngLat.lng, e.lngLat.lat]))
+      // A tap on the traveller: back onto it, heading-up again.
+      const t = traveller.current
+      if (t && s.activeRouteId) {
+        const at = map.project(t.at)
+        if (Math.hypot(at.x - e.point.x, at.y - e.point.y) <= TRAVELLER_TAP_PX) return resumeFollow()
+      }
       if ((e.originalEvent.target as Element | null)?.closest?.('.maplibregl-marker')) return
       const place = map.queryRenderedFeatures(e.point, { layers: ['fof-place-fill'] })[0]
       if (place?.properties.id) return select({ kind: 'building', id: String(place.properties.id) })
@@ -538,10 +563,11 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const pins = useMemo(
     // While navigating, the traveller replaces the "you are here" dot.
     () => [
-      ...pinSpecs(me, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => !navLive || p.kind !== 'origin'),
+      ...pinSpecs(me, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => (livePlaces ? p.kind === 'origin' : true) && (!navLive || p.kind !== 'origin')),
+      ...placePins(mapPlaces.places, selectedId),
       ...tripPins({ from: origin === null ? null : trip.from, to: trip.to, show: planning || navLive }),
     ],
-    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, planning],
+    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, planning, livePlaces, mapPlaces.places],
   )
 
   return (

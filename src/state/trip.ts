@@ -6,13 +6,14 @@
  */
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useCapability } from '@/api/capabilities'
-import { routeErrorMessage, useRoutes } from '@/api/queries'
+import { recallPlace, routeErrorMessage, usePlace, usePointName, useRoutes } from '@/api/queries'
 // DEMO: place names and sample routes until the backend serves places (docs/BACKEND_CONTRACT.md).
 import { ORIGIN, demoRoutes, placeOf } from '@/demo'
 import type { Id, LngLat, Route } from '@/domain'
 import { env } from '@/lib/env'
 import { useUserLocation } from '@/lib/geo/location'
 import { distanceM } from '@/lib/nav/geo'
+import { parsePin } from '@/lib/pin'
 import { useAppStore, type TravelMode } from './store'
 
 export interface TripPlace {
@@ -62,6 +63,29 @@ export function useMyPosition(): LngLat | null {
   return here ?? (env.useMocks ? ORIGIN : null)
 }
 
+/**
+ * One end of a trip as a place. Demo ids and pins resolve at once; a backend place comes from
+ * what search already returned, or is fetched (a shared link opened cold). A pin gets a real
+ * name from the backend when it has one for that point.
+ */
+function useTripPlace(id: Id | null): TripPlace | null {
+  const served = useCapability('search') && !env.useMocks
+  const pin = parsePin(id)
+  const local = placeOf(id)
+  const pinName = usePointName(pin, served)
+  const seen = recallPlace(id)
+  const fetched = usePlace(id && !local && !seen ? id : null, served).data
+  return useMemo(() => {
+    if (!id) return null
+    if (pin) return { id, name: pinName ?? 'Dropped pin', lngLat: pin }
+    if (local) return local
+    const place = fetched ?? seen
+    return place ? { id, name: place.name, lngLat: place.lngLat } : null
+    // `pin` is derived from `id`; its identity changes every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, pinName, local?.id, fetched, seen])
+}
+
 let anchorAt: LngLat | null = null
 const anchorListeners = new Set<() => void>()
 const subscribeAnchor = (l: () => void) => {
@@ -88,16 +112,17 @@ export function useTrip(): Trip {
     anchorListeners.forEach((l) => l())
   }, [me, started])
 
+  const originPlace = useTripPlace(origin)
   const from = useMemo<TripPlace | null>(() => {
     if (origin === null) return anchor ? { id: null, name: YOUR_LOCATION, lngLat: anchor } : null
-    return placeOf(origin) ?? null
-  }, [origin, anchor])
-  const to = useMemo<TripPlace | null>(() => placeOf(destination) ?? null, [destination])
+    return originPlace
+  }, [origin, anchor, originPlace])
+  const to = useTripPlace(destination)
 
   const request = useMemo(() => (live && from && to ? { from: from.lngLat, to: to.lngLat, ...(leaveAt ? { at: leaveAt } : {}) } : null), [live, from, to, leaveAt])
   const planned = useRoutes(request, live)
 
-  const demo = useMemo(() => (live || !from || !to ? [] : demoRoutes(to.id, travelMode, from.lngLat)), [live, from, to, travelMode])
+  const demo = useMemo(() => (live || !from || !to ? [] : demoRoutes(to.id, travelMode, from.lngLat, to.lngLat)), [live, from, to, travelMode])
   const liveRoutes = useMemo(() => retimed(planned.data ?? [], travelMode), [planned.data, travelMode])
   const routes = live ? liveRoutes : demo
 

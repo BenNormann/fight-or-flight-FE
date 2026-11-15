@@ -7,9 +7,9 @@ import { pathFor } from './urlSync'
 const sameSelection = (a: Selection | null, b: Selection) => a?.kind === b.kind && a.id === b.id
 
 /** URL → store, one element per route in router.tsx. */
-export function SelectFromUrl({ kind }: { kind: 'building' | 'room' }) {
+export function SelectFromUrl({ kind }: { kind: 'building' | 'room' | 'place' }) {
   const params = useParams()
-  const id = kind === 'building' ? params.buildingId : params.roomId
+  const id = kind === 'building' ? params.buildingId : kind === 'room' ? params.roomId : params.placeId
   useEffect(() => {
     if (!id) return
     const s = useAppStore.getState()

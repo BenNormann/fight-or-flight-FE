@@ -130,6 +130,62 @@ export interface CampusEvent {
   url?: string
 }
 
+// ── Places (businesses, campus buildings and points the backend's search knows) ─
+
+export interface Place {
+  id: Id
+  /** `place`, `building`, `poi`, `address`; open-ended. */
+  kind: string
+  name: string
+  /** Top-level category id (see `PlaceCategory`). */
+  category?: string
+  subcategory?: string
+  address?: string
+  lngLat: LngLat
+  /** From the point the search was made near. */
+  distanceM?: number
+  /** 0 to 5. */
+  rating?: number
+  reviewCount?: number
+  openNow?: boolean
+}
+
+export const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
+export type Weekday = (typeof WEEKDAYS)[number]
+
+/** One opening interval, local "HH:MM". */
+export interface OpenSpan {
+  open: string
+  close: string
+  /** Closes after midnight. */
+  overnight?: boolean
+  allDay?: boolean
+}
+
+export interface PlaceReview {
+  text: string
+  author?: string
+  rating?: number
+  /** As the source wrote it, e.g. "2 weeks ago". */
+  when?: string
+}
+
+export interface PlaceDetail extends Place {
+  /** Every weekday present; an empty list is a closed day. Undefined: hours unknown. */
+  hours?: Record<Weekday, OpenSpan[]>
+  phone?: string
+  website?: string
+  photoUrl?: string
+  description?: string
+  reviews: PlaceReview[]
+}
+
+export interface PlaceCategory {
+  id: string
+  label: string
+  count: number
+}
+
 // ── Risk & routing (computed by the backend, only rendered here) ─────────────
 
 export const RISK_FACTORS = ['crime', 'lighting', 'crowd', 'weather'] as const
@@ -220,13 +276,15 @@ export interface RouteRequest {
 
 // ── Search & selection ───────────────────────────────────────────────────────
 
-export type EntityKind = 'building' | 'room' | 'poi' | 'event'
+export type EntityKind = 'building' | 'room' | 'poi' | 'event' | 'place'
 
 export interface SearchResult {
   kind: EntityKind
   id: Id
   label: string
   sublabel?: string
+  /** Short trailing text, e.g. a distance. */
+  meta?: string
   lngLat?: LngLat
 }
 
