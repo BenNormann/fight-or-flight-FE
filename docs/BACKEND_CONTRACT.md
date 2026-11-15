@@ -75,7 +75,7 @@ Google OpenID Connect, limited to `@usc.edu` Workspace accounts. Reads stay publ
 
 | Method & path | Behaviour |
 |---|---|
-| `POST /api/v1/location` (signed in) | Body `{lat, lng, accuracy_m, heading_deg?, speed_mps?, ts}` → `204`. `401` when signed out |
+| `POST /api/v1/location` (signed in) | Body `{lat, lng, accuracy_m, speed_mps?, ts}` → `204`. No direction: heading stays on the device (owner decision; the algorithm does not use it). `401` when signed out |
 
 The FE posts every 10 seconds while active (may drop to 5), only while signed in and opted in. Still open for the backend team: location retention and who can read it, and which other endpoints will require sign-in.
 
