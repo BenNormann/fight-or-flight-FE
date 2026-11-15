@@ -1,7 +1,17 @@
 import { CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon } from '@phosphor-icons/react'
 import { useSyncExternalStore } from 'react'
 import { cn } from '@/lib/cn'
-import { followTraveller, getBearing, recenter, resetNorth, subscribeBearing, zoomIn, zoomOut } from '@/map/controller'
+import {
+  followTraveller,
+  getBearing,
+  getCentredOnUser,
+  recenter,
+  resetNorth,
+  subscribeBearing,
+  subscribeCentredOnUser,
+  zoomIn,
+  zoomOut,
+} from '@/map/controller'
 import { useCategoryChips } from '@/state/places'
 import { useAppStore } from '@/state/store'
 import { Chip, ChipRow, IconButton, Keystone, SearchBar, CategoryIcon } from '@/ui'
@@ -111,6 +121,9 @@ export function ControlStack({ className, zoom = false }: { className?: string; 
   // Navigating: this button brings the camera back onto the traveller, heading-up again in 3D.
   const navigating = useAppStore((s) => s.activeRouteId !== null)
   const offTraveller = useAppStore((s) => s.activeRouteId !== null && (!s.navFollowing || s.navAimFree))
+  // Not navigating, and the map already sits on you: the button's next press shows the campus, and says so.
+  const centred = useSyncExternalStore(subscribeCentredOnUser, getCentredOnUser, () => false)
+  const toCampus = !navigating && centred
   return (
     <div className={cn('pointer-events-none flex flex-col gap-2', className)}>
       <CompassButton />
@@ -123,12 +136,13 @@ export function ControlStack({ className, zoom = false }: { className?: string; 
       />
       <IconButton
         tone="float"
-        label={navigating ? 'Recenter on your position' : 'Show my location'}
+        label={navigating ? 'Recenter on your position' : toCampus ? 'Show USC campus' : 'Show my location'}
+        data-next={navigating ? 'traveller' : toCampus ? 'campus' : 'me'}
         data-testid="locate"
         data-off-traveller={offTraveller || undefined}
         // Free camera while navigating: the button stands out until the camera is back on the traveller.
         className={offTraveller ? 'bg-selected! text-selected-foreground!' : undefined}
-        icon={<CrosshairIcon weight={offTraveller ? 'fill' : 'regular'} />}
+        icon={toCampus ? <span aria-hidden className="text-[11px] leading-none font-bold tracking-tight">USC</span> : <CrosshairIcon weight={offTraveller ? 'fill' : 'regular'} />}
         onClick={navigating ? followTraveller : recenter}
       />
       <IconButton

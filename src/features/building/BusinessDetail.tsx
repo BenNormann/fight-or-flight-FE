@@ -129,7 +129,8 @@ export function BusinessDetail({ id }: { id: Id }) {
           // Photos are hot-linked from the place's source: send no referrer, and drop the frame if it does not load.
           referrerPolicy="no-referrer"
           onError={() => setPhotoFailed(true)}
-          className="mt-4 aspect-video w-full rounded-2xl bg-muted object-cover"
+          // The photo keeps its own shape (nothing cropped). A very tall one is capped and centred rather than stretched.
+          className="mx-auto mt-4 block h-auto max-h-[70dvh] w-auto max-w-full rounded-2xl bg-muted"
         />
       ) : null}
 

@@ -53,3 +53,20 @@ export function subscribeBearing(l: () => void) {
   bearingListeners.add(l)
   return () => void bearingListeners.delete(l)
 }
+
+// Whether the map is centred on the user, for a locate button that shows what its next press does.
+let centredOnUser = false
+const centredListeners = new Set<() => void>()
+
+/** Called by MapView when the camera comes to rest or the user's position changes. */
+export function publishCentredOnUser(next: boolean) {
+  if (next === centredOnUser) return
+  centredOnUser = next
+  centredListeners.forEach((l) => l())
+}
+export const getCentredOnUser = () => centredOnUser
+/** For `useSyncExternalStore(subscribeCentredOnUser, getCentredOnUser)`. */
+export function subscribeCentredOnUser(l: () => void) {
+  centredListeners.add(l)
+  return () => void centredListeners.delete(l)
+}

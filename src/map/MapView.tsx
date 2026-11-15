@@ -38,7 +38,7 @@ import {
   cameraPresets,
 } from './camera'
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
-import { followTraveller as resumeFollow, publishBearing, registerMapController } from './controller'
+import { followTraveller as resumeFollow, publishBearing, publishCentredOnUser, registerMapController } from './controller'
 import { POI_LAYER, POI_SOURCE, labelBlocks, gridCells, installPoiIcons, poiFeatures } from './poiIcons'
 import { chromeInsets } from './insets'
 import { installTouchTilt } from './touchTilt'
@@ -544,6 +544,21 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     })
     return () => glide.stop()
   }, [nav, navRoute, reduce, lockOn])
+
+  // Tell the locate button whether the map already sits on the user (its next press then shows the campus).
+  useEffect(() => {
+    if (!map) return
+    const update = () => {
+      const c = map.getCenter()
+      publishCentredOnUser(!!me && metresApart(me, [c.lng, c.lat]) < RECENTER_TOGGLE_M)
+    }
+    update()
+    map.on('moveend', update)
+    return () => {
+      map.off('moveend', update)
+      publishCentredOnUser(false)
+    }
+  }, [map, me])
 
   // ── Commands from chrome ─────────────────────────────────────────────────
   /** Bearing the user had before the compass turned the map north; the compass turns back to it. */
