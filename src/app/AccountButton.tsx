@@ -1,4 +1,4 @@
-import { SignInIcon, SignOutIcon } from '@phosphor-icons/react'
+import { SignOutIcon, UserIcon } from '@phosphor-icons/react'
 import { Suspense, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
 import { loginRoute } from '@/api/adapters/auth'
@@ -31,10 +31,11 @@ export function AccountButton({ overMap = false }: { overMap?: boolean }) {
   if (!user) {
     return (
       <IconButton
-        tone={overMap ? 'float' : 'ghost'}
+        // One style everywhere: the same raised circle in the phone search pill and over the desktop map.
+        tone="float"
         label="Sign in"
         data-testid="account-sign-in"
-        icon={<SignInIcon />}
+        icon={<UserIcon />}
         className="pointer-events-auto"
         onClick={() => navigate(loginRoute(location.pathname + location.search))}
       />
