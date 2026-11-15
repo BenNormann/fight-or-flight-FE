@@ -5,6 +5,7 @@
 import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
 import type { BBox, Id, LngLat, LocationFix, Place, RouteRequest, User } from '@/domain'
+import { demoMode } from '@/lib/demoMode'
 import { env } from '@/lib/env'
 import { ApiError } from './client'
 import { fetchMe, logout } from './adapters/auth'
@@ -272,7 +273,8 @@ export function useLiveLocation(optedIn: boolean): boolean {
   const { status } = useSession()
   const { liveLocation } = useCapabilities()
   const visible = useSyncExternalStore(subscribeVisibility, pageVisible, () => false)
-  const active = status === 'signedIn' && optedIn && liveLocation && visible && typeof navigator !== 'undefined' && 'geolocation' in navigator
+  // Demo mode fakes "your location"; never share the real device position while recording.
+  const active = !demoMode && status === 'signedIn' && optedIn && liveLocation && visible && typeof navigator !== 'undefined' && 'geolocation' in navigator
 
   useEffect(() => {
     if (!active) return

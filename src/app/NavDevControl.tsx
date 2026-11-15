@@ -1,12 +1,13 @@
 import { ArrowsSplitIcon, GpsFixIcon, PauseIcon, PlayIcon, PersonSimpleWalkIcon } from '@phosphor-icons/react'
+import { demoMode } from '@/lib/demoMode'
 import { env } from '@/lib/env'
 import { cn } from '@/lib/cn'
 import { useAppStore } from '@/state/store'
 import { IconButton } from '@/ui'
 import { SIM_RATES, SIM_SIDESTEP_M, useNavDriverSettings } from './navDriverSettings'
 
-/** Development builds and mock mode only. */
-const showNavDevControl = import.meta.env.DEV || env.useMocks
+/** Development builds, mock mode, and demo mode (`?demo`, src/lib/demoMode.ts). */
+const showNavDevControl = import.meta.env.DEV || env.useMocks || demoMode !== null
 
 const pill = 'pointer-events-auto button-sm inline-flex h-tap min-w-tap items-center justify-center gap-1 rounded-full px-3 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.98] transition-[transform,background-color] duration-200'
 
@@ -17,10 +18,11 @@ export function NavDevControl({ className }: { className?: string }) {
   const rate = useNavDriverSettings((s) => s.rate)
   const strayed = useNavDriverSettings((s) => s.sidestepM !== 0)
   // Rerouting re-plans from "your location"; a trip from a place has no "you" to reroute.
-  const canStray = useAppStore((s) => s.origin === null && s.activeRouteId !== null)
+  // Not in demo mode: the recording should not show a test control.
+  const canStray = useAppStore((s) => s.origin === null && s.activeRouteId !== null) && demoMode === null
   const { setSource, setPaused, setRate, setSidestep } = useNavDriverSettings.getState()
   if (!showNavDevControl) return null
-  const simulated = source === 'simulated'
+  const simulated = demoMode !== null || source === 'simulated'
 
   return (
     <div
@@ -29,7 +31,7 @@ export function NavDevControl({ className }: { className?: string }) {
       data-testid="nav-dev-control"
       className={cn('pointer-events-auto flex items-center gap-1 rounded-full bg-card p-0.5 shadow-chip', className)}
     >
-      <button
+      {demoMode ? null : <button
         type="button"
         className={pill}
         aria-label={simulated ? 'Position: simulated walk. Switch to device GPS' : 'Position: device GPS. Switch to simulated walk'}
@@ -37,7 +39,7 @@ export function NavDevControl({ className }: { className?: string }) {
       >
         {simulated ? <PersonSimpleWalkIcon aria-hidden className="size-4" /> : <GpsFixIcon aria-hidden className="size-4" />}
         {simulated ? 'Sim' : 'GPS'}
-      </button>
+      </button>}
       {simulated ? (
         <>
           <IconButton label={paused ? 'Resume walk' : 'Pause walk'} icon={paused ? <PlayIcon /> : <PauseIcon />} onClick={() => setPaused(!paused)} data-testid="nav-sim-pause" />

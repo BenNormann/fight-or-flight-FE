@@ -2,6 +2,8 @@ import { useReducedMotion } from 'motion/react'
 import { useEffect, useMemo } from 'react'
 import type { Route } from '@/domain'
 import { useActiveTrip } from '@/features/route/activeRoute'
+import { demoMode } from '@/lib/demoMode'
+import { setDemoPosition } from '@/lib/geo/location'
 import {
   checkOffRoute,
   chooseHeading,
@@ -51,7 +53,9 @@ export function useNavigationDriver() {
   const route = trip?.route
   const chosenSource = useNavDriverSettings((s) => s.source)
   // A trip that starts somewhere else is played through: there is no "you" on it to follow.
-  const sourceId = useAppStore((s) => s.origin) !== null ? 'simulated' : chosenSource
+  // Demo mode walks every trip for you.
+  const hasOrigin = useAppStore((s) => s.origin) !== null
+  const sourceId = demoMode || hasOrigin ? 'simulated' : chosenSource
   const reduce = useReducedMotion() ?? false
 
   // One simulated walk per route, so switching sources or a hidden page does not restart it.
@@ -99,6 +103,9 @@ export function useNavigationDriver() {
       if (p.arrived) {
         arrived = true
         stop()
+        // Demo mode: "you" are now where the walk ended, so the next trip starts here.
+        const end = route.path[route.path.length - 1]
+        if (demoMode && end) setDemoPosition(end)
       }
     }
 
