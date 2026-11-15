@@ -36,7 +36,9 @@ const simSpeed = (route: Route) => route.distanceM / Math.max(1, route.durationS
 export function useNavigationDriver() {
   const trip = useActiveTrip()
   const route = trip?.route
-  const sourceId = useNavDriverSettings((s) => s.source)
+  const chosenSource = useNavDriverSettings((s) => s.source)
+  // A trip that starts somewhere else is played through: there is no "you" on it to follow.
+  const sourceId = useAppStore((s) => s.origin) !== null ? 'simulated' : chosenSource
   const reduce = useReducedMotion() ?? false
 
   // One simulated walk per route, so switching sources or a hidden page does not restart it.
@@ -103,7 +105,7 @@ export function useNavigationDriver() {
           tracker = ingestFix(tracker, fix, opts).state
           dirty = true
         },
-        (message) => notify({ id: 'nav-location', title: message, description: 'Switch back to the simulated walk to keep going.' }),
+        (message) => notify({ id: 'nav-location', title: message, description: 'Check that location is allowed for this site.' }),
       )
       stopCompass = watchCompass((deg, t) => {
         compass = { deg, t }

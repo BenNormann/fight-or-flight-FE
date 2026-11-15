@@ -10,16 +10,21 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import { createPortal } from 'react-dom'
 import { useAppConfig } from '@/api/queries'
 // DEMO: sample places, routes and heat at real coordinates. Replace with adapters when the backend serves them.
-import { CAMPUS_CENTER, ORIGIN, buildings, demoLayerDefaults, demoRoutes, SAFETY_HEAT_LAYER } from '@/demo'
+import { CAMPUS_CENTER, ORIGIN, buildings, demoLayerDefaults, SAFETY_HEAT_LAYER } from '@/demo'
 import { demoRiskCells } from '@/demo/heat'
 import type { AppConfig, LngLat, MapMode } from '@/domain'
 import { env } from '@/lib/env'
+import { LOCATION_DENIED_HELP, getLocation, requestLocation } from '@/lib/geo/location'
+import { pinId } from '@/lib/pin'
 import { useAppStore } from '@/state/store'
-import { Keystone, PlaceIcon, useBreakpoint, useTheme, useViewportHeight } from '@/ui'
+import { useMyPosition, useTrip } from '@/state/trip'
+import { Keystone, PlaceIcon, notify, useBreakpoint, useTheme, useViewportHeight } from '@/ui'
 import { DEV_FALLBACK_STYLE, buildMapStyle, type MapTheme } from './basemap'
 import { backendBuildingsAvailable, backendBuildingsUrl, basemapBuildings, growWithZoom, pmtilesBuildings, type BuildingSource } from './buildings'
 import {
   BUILDINGS_EXTRUDE_ZOOM,
+  BUILDINGS_FADE_IN_ZOOM,
+  TILE_LOD,
   BUILDINGS_MIN_ZOOM,
   LOCATE_ZOOM,
   MAX_PITCH,
@@ -34,7 +39,7 @@ import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterC
 import { publishBearing, registerMapController } from './controller'
 import { chromeInsets } from './insets'
 import { installTouchTilt } from './touchTilt'
-import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, shownRoutes, type PinSpec, type RiskPalette } from './overlays'
+import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, shownRoutes, tripPins, type PinSpec, type RiskPalette } from './overlays'
 
 /**
  * The ONLY map instance in the app: MapLibre GL over a basemap from config
@@ -104,8 +109,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const panelOpen = useAppStore((s) => s.panelOpen)
   const sheetSnap = useAppStore((s) => s.sheetSnap)
   const view = useAppStore((s) => s.view)
-  const destination = useAppStore((s) => s.destination)
-  const travelMode = useAppStore((s) => s.travelMode)
+  const origin = useAppStore((s) => s.origin)
+  const picking = useAppStore((s) => s.picking)
+  const trip = useTrip()
+  const me = useMyPosition()
   const routeKind = useAppStore((s) => s.routeKind)
   const activeRouteId = useAppStore((s) => s.activeRouteId)
   const nav = useAppStore((s) => s.nav)
@@ -125,10 +132,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const swapping = useRef(false)
   const [buildingSrc, setBuildingSrc] = useState<'pending' | 'basemap' | string>('pending')
 
-  const live = useRef({ mapMode, reduce })
+  const live = useRef({ mapMode, reduce, me })
   useEffect(() => {
-    live.current = { mapMode, reduce }
-  }, [mapMode, reduce])
+    live.current = { mapMode, reduce, me }
+  }, [mapMode, reduce, me])
 
   const on = (id: string) => overrides[id] ?? demoLayerDefaults[id] ?? false
   const heatOn = on(SAFETY_HEAT_LAYER)
@@ -162,6 +169,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       swapping.current = false
       setStyleGen((g) => g + 1)
     })
+    m.setSourceTileLodParams(TILE_LOD.maxZoomLevelsOnScreen, TILE_LOD.tileCountMaxMinRatio)
     m.on('rotate', () => publishBearing(m.getBearing()))
     // 3D only: two fingers moving together vertically tilt. 2D and Iso: two fingers zoom.
     const removeTilt = installTouchTilt(m, () => cameraPresets[useAppStore.getState().mapMode].rotate)
@@ -202,8 +210,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   }, [map, styleGen, buildingSrc])
 
   const routes = useMemo(
-    () => shownRoutes(demoRoutes(destination, travelMode), { activeRouteId, directions: view === 'directions', routeKind }),
-    [destination, travelMode, activeRouteId, view, routeKind],
+    () => shownRoutes(trip.routes, { activeRouteId, directions: view === 'directions', routeKind }),
+    [trip.routes, activeRouteId, view, routeKind],
   )
   const ready = !!map && styleGen > 0 && buildingSrc !== 'pending'
   /** The started route, while it is among the current routes. */
@@ -313,6 +321,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     if (w - insets.left - insets.right < 80 || h - insets.top - insets.bottom < 80) return
     // First view with nothing selected: the whole demo campus and "you are here".
     const target = fit ?? (framed.current ? null : { kind: 'campus' as const, points: [ORIGIN, ...CAMPUS_POINTS] })
+    // While picking a point the user is aiming the map: do not move it under their finger.
+    if (picking && framed.current) return
     framed.current = true
     const box = target && bboxOf(target.points)
     const preset = cameraPresets[mapMode]
@@ -340,7 +350,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     if (!cam) return
     // The fit already accounts for padding; keep only the chrome insets as the map's padding.
     map.easeTo({ ...cam, padding: insets, pitch: pose.pitch, duration: target.kind === 'campus' ? 0 : ms })
-  }, [map, fit, insets, ms, mapMode, navLive])
+  }, [map, fit, insets, ms, mapMode, navLive, picking])
 
   // ── Follow camera ────────────────────────────────────────────────────────
   const follow = useRef({ on: navFollowing && navLive, insets, mapMode })
@@ -467,7 +477,18 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   useEffect(() => {
     if (!map) return
     return registerMapController({
-      recenter: () => map.easeTo({ center: ORIGIN, zoom: Math.max(map.getZoom(), LOCATE_ZOOM), duration: live.current.reduce ? 0 : CAMERA_MS }),
+      recenter: () => {
+        const go = (at: LngLat) => map.easeTo({ center: at, zoom: Math.max(map.getZoom(), LOCATE_ZOOM), duration: live.current.reduce ? 0 : CAMERA_MS })
+        if (live.current.me) return go(live.current.me)
+        // No position yet: this is the moment to ask (the browser prompt needs a user gesture on iOS).
+        void requestLocation().then((fix) => {
+          if (live.current.me) return go(live.current.me)
+          const { status } = getLocation()
+          if (fix) notify({ id: 'location', title: 'You are outside the map area', description: 'Odyssey covers USC and about 10 miles around it.' })
+          else if (status === 'denied') notify({ id: 'location', title: 'Location is blocked', description: LOCATION_DENIED_HELP })
+          else notify({ id: 'location', title: 'Could not find your location', description: 'Check that location is on for this device, then try again.' })
+        })
+      },
       zoomBy: (d) => map.zoomTo(map.getZoom() + d, { duration: live.current.reduce ? 0 : 300 }),
       resetNorth: () => {
         const p = cameraPresets[live.current.mapMode]
@@ -497,6 +518,9 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   useEffect(() => {
     if (!ready || swapping.current) return
     const onClick = (e: MapMouseEvent) => {
+      // Choosing a trip end on the map: any tap is the answer, even on a pin or a building.
+      const s = useAppStore.getState()
+      if (s.picking) return s.setTripEnd(s.picking, pinId([e.lngLat.lng, e.lngLat.lat]))
       if ((e.originalEvent.target as Element | null)?.closest?.('.maplibregl-marker')) return
       const place = map.queryRenderedFeatures(e.point, { layers: ['fof-place-fill'] })[0]
       if (place?.properties.id) return select({ kind: 'building', id: String(place.properties.id) })
@@ -509,8 +533,11 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
 
   const pins = useMemo(
     // While navigating, the traveller replaces the "you are here" dot.
-    () => pinSpecs(ORIGIN, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => !navLive || p.kind !== 'origin'),
-    [selectedId, overrides, navLive],
+    () => [
+      ...pinSpecs(me, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => !navLive || p.kind !== 'origin'),
+      ...tripPins({ from: origin === null ? null : trip.from, to: trip.to, show: view === 'directions' || navLive }),
+    ],
+    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, view],
   )
 
   return (
@@ -519,10 +546,11 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       data-testid="map"
       data-mode={mapMode}
       data-ready={ready || undefined}
+      data-picking={picking ?? undefined}
       role="application"
       aria-roledescription="map"
       aria-label={`Campus map, ${mapMode === '2d' ? '2D' : mapMode === 'iso' ? 'isometric' : '3D'} view. Drag to pan, arrow keys to move, plus and minus to zoom.`}
-      className="absolute inset-0 z-(--z-map) bg-map-land"
+      className="absolute inset-0 z-(--z-map) bg-map-land data-picking:[&_canvas]:cursor-crosshair data-picking:[&_.maplibregl-marker]:pointer-events-none"
       // maplibre-gl.css sets `.maplibregl-map { position: relative }`, which beats utility classes.
       style={{ position: 'absolute', inset: 0 }}
     >
@@ -565,7 +593,7 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
       source: buildings.source,
       'source-layer': buildings.sourceLayer,
       minzoom: BUILDINGS_MIN_ZOOM,
-      paint: { 'fill-color': color, 'fill-opacity': 0.92 },
+      paint: { 'fill-color': color, 'fill-opacity': ['interpolate', ['linear'], ['zoom'], BUILDINGS_MIN_ZOOM, 0, BUILDINGS_FADE_IN_ZOOM, 0.92] },
     })
     // Extrusion grows from 0 at its min zoom, so the hand-over from the flat layer never pops.
     add({
@@ -811,6 +839,19 @@ function PinBody({ pin, instant, onSelect }: { pin: PinSpec; instant: boolean; o
         </span>
         <span aria-hidden className={pin.selected ? 'h-2 w-0.5 bg-selected' : 'h-1 w-px bg-map-building-edge'} />
       </button>
+    )
+  }
+  if (pin.kind === 'trip') {
+    return (
+      <div className="pointer-events-none grid place-items-end justify-center" aria-label={pin.label} role="img" data-pin={pin.key}>
+        {pin.type === 'trip-start' ? (
+          <span className="block size-4 rounded-full border-[3px] border-foreground bg-background shadow-chip" />
+        ) : (
+          <span className="grid size-8 place-items-center rounded-full bg-selected text-selected-foreground shadow-chip [&_svg]:size-4">
+            <PlaceIcon type="pin" weight="fill" />
+          </span>
+        )}
+      </div>
     )
   }
   const emergency = pin.type === 'blue_light' || pin.type === 'dps'

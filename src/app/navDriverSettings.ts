@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import { env } from '@/lib/env'
 import type { PositionSourceId } from '@/lib/nav'
 
 export const SIM_RATES = [1, 4, 16] as const
@@ -16,7 +17,8 @@ interface NavDriverSettings {
 }
 
 export const useNavDriverSettings = create<NavDriverSettings>()((set) => ({
-  source: 'simulated',
+  // Sample routes are walked for you; real routes follow the phone.
+  source: env.useMocks ? 'simulated' : 'device',
   paused: false,
   rate: 1,
   setSource: (source) => set({ source }),

@@ -3,8 +3,11 @@ import { env } from '@/lib/env'
 export class ApiError extends Error {
   readonly status: number
   readonly path: string
-  constructor(status: number, path: string, message?: string) {
+  /** The backend's own explanation (`{ message }` in the error body), when it sent one. */
+  readonly detail: string | undefined
+  constructor(status: number, path: string, message?: string, detail?: string) {
     super(message ?? `API ${status} for ${path}`)
+    this.detail = detail
     this.name = 'ApiError'
     this.status = status
     this.path = path
@@ -50,7 +53,16 @@ export async function apiFetch(
     if (cause instanceof DOMException && cause.name === 'AbortError') throw cause
     throw new ApiError(0, path, `Network error for ${path}`)
   }
-  if (!res.ok) throw new ApiError(res.status, path)
+  if (!res.ok) {
+    let detail: string | undefined
+    try {
+      const body = (await res.json()) as { message?: unknown } | null
+      if (typeof body?.message === 'string') detail = body.message
+    } catch {
+      /* No JSON body: the status is all we know. */
+    }
+    throw new ApiError(res.status, path, undefined, detail)
+  }
   if (res.status === 204) return null
   const text = await res.text()
   return text ? (JSON.parse(text) as unknown) : null

@@ -4,6 +4,8 @@ import type { Id, IsoTime, MapMode, NavCharacterId, NavProgress, RouteKind, Sele
 /** Which view the sheet (mobile) or side panel (desktop) shows. One feature folder each. */
 export type PanelView = 'explore' | 'search' | 'place' | 'directions' | 'navigation' | 'events' | 'layers' | 'safety'
 export type TravelMode = 'walk' | 'bike' | 'ride'
+/** One end of a trip. */
+export type TripEnd = 'origin' | 'destination'
 
 /** The one UI store. Server data lives in TanStack Query; shareable state lives in the URL. */
 export interface AppState {
@@ -20,8 +22,12 @@ export interface AppState {
   leaveAt: IsoTime | null
   travelMode: TravelMode
   routeKind: RouteKind
-  /** Destination for directions (an entity id). */
+  /** Where directions start: an entity or pin id, or null for the user's own location. */
+  origin: Id | null
+  /** Destination for directions (an entity or pin id). */
   destination: Id | null
+  /** The next tap on the map sets this end of the trip. */
+  picking: TripEnd | null
   /** A started route; drives the active route pill. */
   activeRouteId: Id | null
   /** Layer ids the user toggled, overriding each LayerDef.defaultOn. */
@@ -42,6 +48,10 @@ export interface AppState {
   setPanelOpen: (open: boolean) => void
   search: (query: string, category?: string | null) => void
   directionsTo: (destination: Id | null) => void
+  /** Set one end of the trip (origin null = your location) and show directions. */
+  setTripEnd: (end: TripEnd, id: Id | null) => void
+  swapTripEnds: () => void
+  setPicking: (end: TripEnd | null) => void
   setTravelMode: (mode: TravelMode) => void
   setRouteKind: (kind: RouteKind) => void
   startRoute: (routeId: Id) => void
@@ -76,7 +86,9 @@ export const useAppStore = create<AppState>()((set) => ({
   leaveAt: null,
   travelMode: 'walk',
   routeKind: 'safest',
+  origin: null,
   destination: null,
+  picking: null,
   activeRouteId: null,
   layerOverrides: {},
   liveLocationOptIn: false,
@@ -106,15 +118,29 @@ export const useAppStore = create<AppState>()((set) => ({
         ? { query, category, view: 'search', sheetSnap: 'half', panelOpen: true }
         : { query, category, view: homeView(s), selection: null, sheetSnap: 'peek', panelOpen: true },
     ),
-  // A started route belongs to one destination, mode and kind: changing any of them ends it.
+  // A started route belongs to one start, destination, mode and kind: changing any of them ends it.
   directionsTo: (destination) =>
     set((s) => ({
       destination,
+      // Directions to the place you start from make no sense: start from your location instead.
+      origin: destination !== null && destination === s.origin ? null : s.origin,
+      picking: null,
       view: 'directions',
       sheetSnap: 'half',
       panelOpen: true,
       ...(destination === s.destination ? {} : ended),
     })),
+  setTripEnd: (end, id) =>
+    set((s) => {
+      const origin = end === 'origin' ? id : s.origin === id ? null : s.origin
+      const destination = end === 'destination' ? id : s.destination === id ? null : s.destination
+      const changed = origin !== s.origin || destination !== s.destination
+      return { origin, destination, picking: null, view: 'directions', sheetSnap: 'half', panelOpen: true, ...(changed ? ended : {}) }
+    }),
+  // Swapping with "your location" as the start leaves the destination empty: there is no place id for "here".
+  swapTripEnds: () => set((s) => ({ origin: s.destination, destination: s.origin, picking: null, ...ended })),
+  // Picking on the map: get the sheet out of the way.
+  setPicking: (picking) => set(picking ? { picking, sheetSnap: 'peek' } : { picking: null }),
   setTravelMode: (travelMode) => set((s) => (travelMode === s.travelMode ? {} : { travelMode, ...ended })),
   setRouteKind: (routeKind) => set((s) => (routeKind === s.routeKind ? {} : { routeKind, ...ended })),
   startRoute: (activeRouteId) =>
@@ -129,6 +155,7 @@ export const useAppStore = create<AppState>()((set) => ({
   back: () =>
     set((s) => {
       if (s.view === 'navigation') return {}
+      if (s.picking) return { picking: null, sheetSnap: 'half' }
       if (s.view === 'search' || s.view === 'explore') {
         return { query: '', category: null, selection: null, view: homeView(s), sheetSnap: 'peek' }
       }

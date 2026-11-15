@@ -6,8 +6,15 @@ import { useAppStore, type AppState } from '@/state/store'
 import { gateFor, isLoginPath, requiresSignIn } from './authGate'
 
 /** The URL a store state should live at. Everything not listed is `/` (a sheet state). */
-export function pathFor(s: Pick<AppState, 'selection' | 'view' | 'destination'>): string {
-  if (s.view === 'directions') return s.destination ? `/route?to=${encodeURIComponent(s.destination)}` : '/route'
+export function pathFor(s: Pick<AppState, 'selection' | 'view' | 'destination'> & { origin?: AppState['origin'] }): string {
+  if (s.view === 'directions') {
+    const q = new URLSearchParams()
+    if (s.destination) q.set('to', s.destination)
+    // No `from`: the trip starts at the user's own location.
+    if (s.origin) q.set('from', s.origin)
+    const qs = q.toString()
+    return qs ? `/route?${qs}` : '/route'
+  }
   if (s.view === 'place' && s.selection?.kind === 'building') return `/b/${encodeURIComponent(s.selection.id)}`
   if (s.view === 'place' && s.selection?.kind === 'room') return `/r/${encodeURIComponent(s.selection.id)}`
   return '/'
@@ -25,6 +32,7 @@ export function useStoreToUrl() {
   const selection = useAppStore((s) => s.selection)
   const view = useAppStore((s) => s.view)
   const destination = useAppStore((s) => s.destination)
+  const origin = useAppStore((s) => s.origin)
   useEffect(() => {
     if (isLoginPath(location.pathname)) return
     const next = pathFor(useAppStore.getState())
@@ -38,5 +46,5 @@ export function useStoreToUrl() {
     }
     if (next !== here) navigate(next)
     // eslint-disable-next-line react-hooks/exhaustive-deps -- react to store and session changes only
-  }, [selection, view, destination, status])
+  }, [selection, view, destination, origin, status])
 }

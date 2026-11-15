@@ -185,6 +185,8 @@ export interface Route {
   risk: { mean: number; max: number }
   segments: RouteSegment[]
   warnings: string[]
+  /** Good things about this route worth one line, e.g. "Passes 9 emergency phones". */
+  highlights?: string[]
   /** Turn-by-turn steps in travel order. Empty when the source gives none: then no turn banner. */
   steps: RouteStep[]
 }
@@ -212,7 +214,8 @@ export type NavCharacterId = 'chevron' | (string & {})
 export interface RouteRequest {
   from: LngLat
   to: LngLat
-  at: IsoTime
+  /** Departure time; omitted means now. */
+  at?: IsoTime
 }
 
 // ── Search & selection ───────────────────────────────────────────────────────

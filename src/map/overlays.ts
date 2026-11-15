@@ -101,7 +101,7 @@ export interface PinSpec {
   key: string
   lngLat: LngLat
   label: string
-  kind: 'building' | 'poi' | 'event' | 'origin'
+  kind: 'building' | 'poi' | 'event' | 'origin' | 'trip'
   type: string
   selection?: Selection
   selected: boolean
@@ -116,8 +116,8 @@ function poiLayer(p: Poi): string | null {
 }
 
 /** Pins for the demo places, filtered by the demo layer toggles. Selected pin last so it paints on top. */
-export function pinSpecs(origin: LngLat, selectedId: Id | null, isOn: (layerId: string) => boolean): PinSpec[] {
-  const out: PinSpec[] = [{ key: 'origin', lngLat: origin, label: 'Your location', kind: 'origin', type: 'origin', selected: false }]
+export function pinSpecs(origin: LngLat | null, selectedId: Id | null, isOn: (layerId: string) => boolean): PinSpec[] {
+  const out: PinSpec[] = origin ? [{ key: 'origin', lngLat: origin, label: 'Your location', kind: 'origin', type: 'origin', selected: false }] : []
   for (const p of pois) {
     const layer = poiLayer(p)
     if (layer && !isOn(layer)) continue
@@ -136,6 +136,25 @@ export function pinSpecs(origin: LngLat, selectedId: Id | null, isOn: (layerId: 
   for (const b of buildings)
     out.push({ key: b.id, lngLat: b.centroid, label: b.name, kind: 'building', type: 'building', selected: selectedId === b.id, selection: { kind: 'building', id: b.id } })
   return out.sort((a, b) => Number(a.selected) - Number(b.selected))
+}
+
+interface TripPinPlace {
+  id: Id | null
+  name: string
+  lngLat: LngLat
+}
+
+/**
+ * Markers for the ends of a trip, while directions or navigation show it: a ring at a start
+ * that is not the user, and a pin at a destination that has no pin of its own (a point picked on the map).
+ */
+export function tripPins({ from, to, show }: { from: TripPinPlace | null; to: TripPinPlace | null; show: boolean }): PinSpec[] {
+  if (!show) return []
+  const out: PinSpec[] = []
+  if (from) out.push({ key: 'trip-start', lngLat: from.lngLat, label: `Start: ${from.name}`, kind: 'trip', type: 'trip-start', selected: false })
+  const known = to && (buildings.some((b) => b.id === to.id) || pois.some((p) => p.id === to.id))
+  if (to && !known) out.push({ key: 'trip-end', lngLat: to.lngLat, label: `Destination: ${to.name}`, kind: 'trip', type: 'trip-end', selected: false })
+  return out
 }
 
 /** Points the camera should frame: the shown route (plus its destination footprint), else the selected place. */

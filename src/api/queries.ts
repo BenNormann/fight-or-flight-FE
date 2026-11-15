@@ -4,16 +4,20 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
-import type { LngLat, LocationFix, User } from '@/domain'
+import type { LngLat, LocationFix, RouteRequest, User } from '@/domain'
 import { ApiError } from './client'
 import { fetchMe, logout } from './adapters/auth'
 import { fetchConfig } from './adapters/config'
 import { postLocation } from './adapters/location'
+import { fetchRoutes } from './adapters/route'
+
+export { routeErrorMessage } from './adapters/route'
 import { isUnavailable, markUnavailable, useCapabilities } from './capabilities'
 
 export const queryKeys = {
   config: ['config'] as const,
   session: ['session'] as const,
+  routes: (req: RouteRequest) => ['routes', req.from, req.to, req.at ?? 'now'] as const,
 }
 
 export function useAppConfig() {
@@ -65,6 +69,26 @@ export function useSignOut() {
     mutationFn: logout,
     // Signed out locally even if the request failed: the UI must never claim a session it may not have.
     onSettled: () => client.setQueryData(queryKeys.session, null),
+  })
+}
+
+/** Safe and fastest walking routes from the backend planner. `null` request or `enabled: false`: idle. */
+export function useRoutes(req: RouteRequest | null, enabled = true) {
+  return useQuery({
+    queryKey: req ? queryKeys.routes(req) : ['routes', 'idle'],
+    queryFn: async ({ signal }) => {
+      try {
+        return await fetchRoutes(req!, signal)
+      } catch (e) {
+        if (e instanceof ApiError && e.notServed) markUnavailable('routing')
+        throw e
+      }
+    },
+    enabled: enabled && !!req,
+    // Risk changes by the hour, not by the minute.
+    staleTime: 5 * 60_000,
+    // A 400 is an answer (too far, off the street network): asking again will not change it.
+    retry: (count, e) => count < 1 && !(e instanceof ApiError && e.status >= 400 && e.status < 500),
   })
 }
 

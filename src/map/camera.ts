@@ -29,11 +29,19 @@ export const BUILDINGS_MIN_ZOOM = 13
 /**
  * Iso and 3D: below this zoom buildings are a plain `fill` (no extrusion work on the GPU).
  * From here the extrusion layer takes over at height 0 and grows to full height by
- * {@link BUILDINGS_FULL_HEIGHT_ZOOM}, so the switch never pops. Around campus, 14 is
- * where blocks stop reading as individual buildings.
+ * {@link BUILDINGS_FULL_HEIGHT_ZOOM}, so the switch never pops. 15 keeps extrusion to
+ * a few blocks around the camera: a tilted view at 14 would extrude thousands of buildings.
  */
-export const BUILDINGS_EXTRUDE_ZOOM = 14
-export const BUILDINGS_FULL_HEIGHT_ZOOM = 15.5
+export const BUILDINGS_EXTRUDE_ZOOM = 15
+export const BUILDINGS_FULL_HEIGHT_ZOOM = 16
+/** Footprints fade in over this zoom range instead of popping in tile by tile. */
+export const BUILDINGS_FADE_IN_ZOOM = 13.75
+/**
+ * A tilted view loads lower-zoom tiles for the far field. Those hold fewer (or no) buildings,
+ * which shows as hard-edged patches. At most two zoom levels on screen keeps the far field
+ * one level below the near field, where buildings are still present.
+ */
+export const TILE_LOD = { maxZoomLevelsOnScreen: 2, tileCountMaxMinRatio: 3 } as const
 
 const M_PER_DEG_LAT = 111_320
 /** About 10 miles. */

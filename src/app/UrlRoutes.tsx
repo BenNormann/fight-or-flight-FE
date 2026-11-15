@@ -21,10 +21,12 @@ export function SelectFromUrl({ kind }: { kind: 'building' | 'room' }) {
 export function DirectionsFromUrl() {
   const [params] = useSearchParams()
   const to = params.get('to')
+  const from = params.get('from')
   useEffect(() => {
     const s = useAppStore.getState()
     if (s.view !== 'directions' || s.destination !== to) s.directionsTo(to)
-  }, [to])
+    if (useAppStore.getState().origin !== from) useAppStore.getState().setTripEnd('origin', from)
+  }, [to, from])
   return null
 }
 

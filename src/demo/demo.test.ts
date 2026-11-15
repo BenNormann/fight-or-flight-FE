@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { SAFETY_HEAT_LAYER, buildings, demoLayerDefaults, demoLayers, demoRoutes, demoSearch, maneuverFor, project, rooms, stepsFromPath, unproject } from '.'
+import { SAFETY_HEAT_LAYER, buildings, demoLayerDefaults, demoLayers, demoRoutes, demoSearch, project, rooms, unproject } from '.'
+import { maneuverFor, stepsFromPath } from '@/lib/nav/steps'
 import { demoRiskCells } from './heat'
 
 describe('demo data', () => {

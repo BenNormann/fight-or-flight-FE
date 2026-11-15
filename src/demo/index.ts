@@ -16,16 +16,15 @@ import type {
   CampusEvent,
   Id,
   LngLat,
-  Maneuver,
   Poi,
   Room,
   Route,
   RouteKind,
   RouteSegment,
-  RouteStep,
   SearchResult,
 } from '@/domain'
-import { angleDelta, bearingDeg, distanceM, measure } from '@/lib/nav/geo'
+import { parsePin } from '@/lib/pin'
+import { stepsFromPath } from '@/lib/nav/steps'
 import { formatHour as t } from '@/lib/time'
 
 export const PLANE = 1600
@@ -209,6 +208,8 @@ export function placeOf(id: Id | null | undefined): { id: Id; name: string; lngL
   }
   const p = findPoi(id)
   if (p) return { id: p.id, name: p.name ?? 'Pinned place', lngLat: p.lngLat }
+  const pin = parsePin(id)
+  if (pin && id) return { id, name: 'Dropped pin', lngLat: pin }
   return undefined
 }
 
@@ -264,48 +265,9 @@ function lengthM(path: LngLat[]) {
   return m
 }
 
-/** Turn type from the signed change of direction at a vertex (positive is right). */
-export function maneuverFor(deltaDeg: number): Maneuver {
-  const a = Math.abs(deltaDeg)
-  const side = deltaDeg > 0 ? 'right' : 'left'
-  if (a < 20) return 'straight'
-  if (a < 45) return `slight-${side}` as const
-  if (a < 135) return side
-  if (a < 170) return `sharp-${side}` as const
-  return 'u-turn'
-}
-
-/**
- * Turn-by-turn steps from a path and a street name per segment, the way a
- * router would return them: depart, one step per real turn (or per name change
- * on a straight), arrive. Zero-length segments are dropped first.
- */
-export function stepsFromPath(path: LngLat[], legNames: (string | undefined)[]): RouteStep[] {
-  const pts: LngLat[] = []
-  const names: (string | undefined)[] = []
-  path.forEach((p, i) => {
-    const prev = pts[pts.length - 1]
-    if (prev && distanceM(prev, p) < 0.5) return
-    if (prev) names.push(legNames[i - 1])
-    pts.push(p)
-  })
-  if (pts.length < 2) return []
-  const cum = measure(pts)
-  const steps: RouteStep[] = [{ maneuver: 'depart', at: pts[0]!, offsetM: 0, distanceM: 0, name: names[0] }]
-  for (let i = 1; i < pts.length - 1; i++) {
-    const turn = maneuverFor(angleDelta(bearingDeg(pts[i - 1]!, pts[i]!), bearingDeg(pts[i]!, pts[i + 1]!)))
-    if (turn === 'straight' && names[i] === names[i - 1]) continue
-    steps.push({ maneuver: turn, at: pts[i]!, offsetM: Math.round(cum[i]!), distanceM: 0, name: names[i] })
-  }
-  const total = Math.round(cum[cum.length - 1]!)
-  steps.push({ maneuver: 'arrive', at: pts[pts.length - 1]!, offsetM: total, distanceM: 0 })
-  // Each leg runs to the next maneuver.
-  return steps.map((s, i) => ({ ...s, distanceM: i < steps.length - 1 ? steps[i + 1]!.offsetM - s.offsetM : 0 }))
-}
-
-function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
+function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode, from: LngLat): Route {
   const [tx, ty] = project(to)
-  const [ox, oy] = project(ORIGIN)
+  const [ox, oy] = project(from)
   // Safest hugs the lit avenue on the west edge; fastest cuts through Lot 6 and the quad.
   const waypoints: [number, number][] =
     kind === 'safest'
@@ -331,10 +293,10 @@ function makeRoute(kind: RouteKind, to: LngLat, mode: DemoTravelMode): Route {
   }
 }
 
-export function demoRoutes(destination: Id | null, mode: DemoTravelMode): Route[] {
+export function demoRoutes(destination: Id | null, mode: DemoTravelMode, from: LngLat = ORIGIN): Route[] {
   const to = placeOf(destination)
   if (!to) return []
-  return [makeRoute('fastest', to.lngLat, mode), makeRoute('safest', to.lngLat, mode)]
+  return [makeRoute('fastest', to.lngLat, mode, from), makeRoute('safest', to.lngLat, mode, from)]
 }
 
 // ── Map layers (demo toggles; real ones come from src/map/layers/registry) ───

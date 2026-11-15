@@ -4,7 +4,7 @@
  * Be liberal in what is accepted; the domain type is the strict side.
  */
 import { z } from 'zod'
-import { apiFetch } from '@/api/client'
+import { apiFetch, ApiError } from '@/api/client'
 import {
   CAPABILITY_KEYS,
   type AppConfig,
@@ -65,6 +65,24 @@ export function parseConfig(raw: unknown): AppConfig {
   }
 }
 
+/** USC University Park: the centre of the backend's study area. */
+const USC: [number, number] = [-118.2851, 34.0224]
+
+/**
+ * What the hosted backend serves today (docs/BACKEND_CONTRACT.md). It has no config endpoint,
+ * so this stands in for one. Each capability still switches itself off if its endpoint answers 404.
+ */
+export const LIVE_DEFAULT_CONFIG = {
+  bounds: [USC[0] - 0.012, USC[1] - 0.008, USC[0] + 0.012, USC[1] + 0.008],
+  center: USC,
+  features: ['auth', 'routing'],
+}
+
 export async function fetchConfig(signal?: AbortSignal): Promise<AppConfig> {
-  return parseConfig(await apiFetch('/api/config', { signal }))
+  try {
+    return parseConfig(await apiFetch('/api/config', { signal }))
+  } catch (e) {
+    if (e instanceof ApiError && e.notServed) return parseConfig(LIVE_DEFAULT_CONFIG)
+    throw e
+  }
 }

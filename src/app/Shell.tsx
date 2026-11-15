@@ -10,6 +10,7 @@ import NavAnnouncer from '@/features/route/NavAnnouncer'
 import { isLoginPath } from './authGate'
 import { useNavigationDriver } from './useNavigationDriver'
 import { DesktopLayout, TouchLayout } from './layouts'
+import { LocationPrompt } from './LocationPrompt'
 import { useStoreToUrl } from './urlSync'
 
 /** Lazy: the map engine and its data load as their own chunk, in parallel with the chrome. */
@@ -80,6 +81,7 @@ export function Shell() {
       ) : (
         <TouchLayout tablet={breakpoint === 'tablet'} footer={status} />
       )}
+      {signingIn ? null : <LocationPrompt />}
       <div
         className={cn(
           // `!`: MapLibre's stylesheet is unlayered, so it beats Tailwind's utilities layer otherwise.

@@ -7,6 +7,7 @@ describe('pathFor', () => {
     expect(pathFor({ view: 'place', selection: { kind: 'room', id: 'r-3' }, destination: null })).toBe('/r/r-3')
     expect(pathFor({ view: 'directions', selection: null, destination: 'b-eng' })).toBe('/route?to=b-eng')
     expect(pathFor({ view: 'directions', selection: null, destination: null })).toBe('/route')
+    expect(pathFor({ view: 'directions', selection: null, destination: 'b-eng', origin: 'pin:34.02000,-118.28000' })).toBe('/route?to=b-eng&from=pin%3A34.02000%2C-118.28000')
   })
 
   it('keeps sheet states (search, events, layers, safety) at /', () => {

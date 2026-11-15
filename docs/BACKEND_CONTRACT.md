@@ -57,14 +57,40 @@ Buildings: 969,395 LA County footprints (LARIAC 2020) within ~16 km (10 miles) o
 | Product feature | Status |
 |---|---|
 | Risk score per cell with factors | **Gap.** Branch `algorithm-init` has an XGBoost crime-risk model and plans `GET /hotzones?hour`, `GET /score?lat&lng&hour`; not implemented. FE must not compute risk |
-| Safe routing | **Gap.** `GET /route` is planned in `algorithm-init`, not implemented |
-| Turn-by-turn steps | **Gap.** The FE's turn banner needs steps with each route: `{maneuver, at: [lng, lat], offset_m, distance_m, name?}` (maneuver: depart, straight, slight/sharp left/right, left, right, u-turn, arrive). The FE renders steps; it does not derive them from geometry in production |
+| Safe routing | **Served** (checked live 2026-11-14): see "Routing" below |
+| Turn-by-turn steps | **Gap.** Wanted with each route: `{maneuver, at: [lng, lat], offset_m, distance_m, name?}` (maneuver: depart, straight, slight/sharp left/right, left, right, u-turn, arrive). Until then the FE reads left / right off the line's shape (`src/lib/nav/steps.ts`), with no street names |
 | Building names, codes, floors, rooms | **Gap.** No campus building identity anywhere in the API |
-| Search | **Gap** (nothing to search without named places) |
+| Search | **Gap.** Requested: see "Search (requested)" below. The Google Maps places file (15,343 places) is in the backend repo but not loaded: `/pois` returns an empty list |
 | POIs (blue lights, DPS, bike racks, seating) | **Gap.** `algorithm-init` references a blue-light CSV that is not in the repo |
 | Events | **Gap** |
 | Basemap (streets, labels) | **Gap.** FE supplies its own basemap; `/roads` could draw streets but has no labels or land use |
-| Config endpoint (bounds, centre) | **Gap.** FE uses env/defaults |
+| Config endpoint (bounds, centre) | **Gap.** `/api/config` is 404; the FE falls back to `LIVE_DEFAULT_CONFIG` in `src/api/adapters/config.ts` (USC centre, `auth` and `routing` on) |
+
+## Routing (served)
+
+`GET /api/v1/route?from=lat,lng&to=lat,lng[&at=ISO][&date=&hour=&max_detour=&phone_weight=]`. Public. Walking only.
+
+Response: `{ safe, shortest, date, hour, start, end, snap_m, params, ... }`. Each of `safe` and `shortest`:
+`geometry` (GeoJSON LineString, `[lng, lat]`), `coords` (`[lat, lng]`), `length_m`, `detour_pct`, `mean_risk`, `max_risk` (0 to 1),
+`high_risk_m`, `no_data_pct`, `n_phones`, `phones_passed[] {name, lat, lon, dist_m}`, `via_phone`.
+
+Errors: `400 {code, message}` when the ends are over 12 km apart, or an end is over 300 m from a walkable street, or there is no path; `503` while the planner warms up. The FE shows the 400 `message` as is.
+
+Adapter: `src/api/adapters/route.ts` (`safe` -> `safest`, `shortest` -> `fastest`). Not in the response, so derived in the adapter:
+- **Travel time**: `length_m / 1.35 m/s`. Bike and ride only change the time; the line is the walking line.
+- **Per-segment risk**: none, so the whole line is coloured by `mean_risk`. Wanted: risk per stretch of the line.
+- **Steps**: see the gaps table.
+
+## Search (requested, not in the backend)
+
+`GET /api/v1/search?q=&near=lat,lng&bbox=&category=&open_now=&limit=` -> `{ results: [{ id, kind: place|building|poi|address, name, category, address, lat, lng, distance_m?, rating?, review_count?, open_now? }] }`, best match first.
+Prefix and typo tolerant from one character (it runs per keystroke), matches name, category and aliases (building codes), ranks by match, then distance from `near`, then popularity. Empty `q` with `category` returns the nearest places in it.
+
+`GET /api/v1/search/categories` -> `[{ id, label, count }]` (8 to 10 top-level groups over the Google types).
+`GET /api/v1/places/{id}` -> the result fields plus `hours`, `phone`, `website`, `photo_url`, `rating_breakdown`, `attributes`.
+Nice to have: `GET /api/v1/geocode/reverse?at=lat,lng` -> `{ name, address }` for points picked on the map.
+
+Until this exists the FE's search and place sheets run on `src/demo`.
 
 ## Open questions for the backend team
 
@@ -101,7 +127,8 @@ The FE posts every 10 seconds while active (may drop to 5), only while signed in
 
 ## FE status
 
-- No adapter matches this API yet. The existing `config` adapter, fixture and mock handler follow the FE's earlier proposal (`/api/config`) and are obsolete; they stay only so the app boots in mock mode.
+- Wired: auth, `/route` (directions between any two points), `buildings.pmtiles`. Everything else (places, search, heat, events) is still `src/demo`.
+- The `config` adapter, fixture and mock handler follow the FE's earlier proposal (`/api/config`); they stay so the app boots in mock mode.
 - The dev proxy forwards `/api`, which already covers `/api/v1`.
 
 ## History
@@ -109,3 +136,4 @@ The FE posts every 10 seconds while active (may drop to 5), only while signed in
 - 2026-11-14 (a): FE proposal replaced by the endpoint list supplied by the product owner.
 - 2026-11-14 (b): synced from backend source (`backend-setup`): added the `/api/v1` prefix, response shapes, `/buildings`, `/roads`, `/roads/graph`, `/observations/metrics`, `/incidents/hourly`, PMTiles layer details, and planned endpoints from `algorithm-init`.
 - 2026-11-14 (c): auth implemented on the backend (Google, USC only); contract updated from that code. Live location still proposed.
+- 2026-11-14 (d): `/route` is live and wired; search endpoints requested; `/api/config` fallback documented.
