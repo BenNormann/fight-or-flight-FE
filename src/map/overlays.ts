@@ -13,6 +13,24 @@ import { aheadPieces, clip, splitAt } from './routeLine'
 export type RiskPalette = readonly [string, string, string, string, string]
 export const riskFill = (score: number, palette: RiskPalette) => palette[riskBand(score).level - 1]!
 
+/**
+ * A gentle arc from `a` to `b` (bulging to the left of travel), as points. It reads as "then make your
+ * own way here", unlike a straight line, which looks like a path that exists.
+ */
+export function arc(a: LngLat, b: LngLat, bulge = 0.22, steps = 16): LngLat[] {
+  const k = Math.cos((((a[1] + b[1]) / 2) * Math.PI) / 180)
+  const dx = (b[0] - a[0]) * k
+  const dy = b[1] - a[1]
+  // Control point: the midpoint pushed sideways by a share of the length.
+  const cx = (a[0] + b[0]) / 2 + (-dy * bulge) / k
+  const cy = (a[1] + b[1]) / 2 + dx * bulge
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps
+    const u = 1 - t
+    return [u * u * a[0] + 2 * u * t * cx + t * t * b[0], u * u * a[1] + 2 * u * t * cy + t * t * b[1]] as LngLat
+  })
+}
+
 export interface ShownRoutes {
   chosen: Route | null
   others: Route[]
@@ -60,8 +78,8 @@ export function routeFeatures(
   if (chosen && chosen.path.length >= 2) {
     const first = chosen.path[0]!
     const last = chosen.path[chosen.path.length - 1]!
-    if (ends.from && apartM(ends.from, first) >= LINK_MIN_M) links.push(line([ends.from, first], { role: 'link' }))
-    if (ends.to && apartM(ends.to, last) >= LINK_MIN_M) links.push(line([last, ends.to], { role: 'link' }))
+    if (ends.from && apartM(ends.from, first) >= LINK_MIN_M) links.push(line(arc(ends.from, first), { role: 'link' }))
+    if (ends.to && apartM(ends.to, last) >= LINK_MIN_M) links.push(line(arc(last, ends.to), { role: 'link' }))
   }
   const features = [
     ...links,

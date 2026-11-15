@@ -261,7 +261,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
         return
       }
       const colors = characterColors(theme)
-      const body = characterFeatures(characterFor(navCharacter), t, { zoom: map.getZoom(), mode: mapMode }, colors)
+      const body = characterFeatures(characterFor(navCharacter), { at: t.at, headingDeg: t.headingDeg, progressM: t.progressM }, { zoom: map.getZoom(), mode: mapMode }, colors)
       // Halo under the character: flat, drawn above the buildings, so the position shows even when a wall hides the 3D arrow.
       const halo = { type: 'Feature' as const, properties: { role: 'halo', color: colors.body }, geometry: { type: 'Point' as const, coordinates: t.at } }
       setData(map, 'fof-nav-char', { type: 'FeatureCollection', features: [halo, ...body.features] })

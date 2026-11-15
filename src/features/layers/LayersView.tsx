@@ -1,7 +1,7 @@
 import { CalendarDotsIcon, FlameIcon, LetterCirclePIcon, PhoneIcon, StackIcon } from '@phosphor-icons/react'
 import type { ReactNode } from 'react'
 import { SAFETY_HEAT_LAYER, demoLayers, type DemoLayerIcon } from '@/demo'
-import type { MapMode } from '@/domain'
+import { NAV_CHARACTERS, type MapMode, type NavCharacterId } from '@/domain'
 import { riskBands } from '@/lib/risk'
 import { formatHour } from '@/lib/time'
 import { layers as registry } from '@/map/layers/registry'
@@ -13,6 +13,7 @@ const MAP_MODES: { value: MapMode; label: string }[] = [
   { value: 'iso', label: 'Iso' },
   { value: '3d', label: '3D' },
 ]
+const CHARACTERS: { value: NavCharacterId; label: string }[] = NAV_CHARACTERS.map((c) => ({ value: c.id, label: c.label }))
 const THEMES: { value: ThemeMode; label: string }[] = [
   { value: 'auto', label: 'Auto' },
   { value: 'light', label: 'Light' },
@@ -33,6 +34,8 @@ export default function LayersView() {
   const toggleLayer = useAppStore((s) => s.toggleLayer)
   const back = useAppStore((s) => s.back)
   const { mode, setMode } = useTheme()
+  const navCharacter = useAppStore((s) => s.navCharacter)
+  const setNavCharacter = useAppStore((s) => s.setNavCharacter)
 
   const toggles = [
     ...registry.filter((l) => l.userToggle !== false).map((l) => ({ id: l.id, label: l.label, description: undefined, icon: <StackIcon />, on: overrides[l.id] ?? l.defaultOn })),
@@ -71,6 +74,11 @@ export default function LayersView() {
           </ul>
         ) : null}
       </Section>
+      <Section title="Your character">
+        <SegmentedControl label="Character shown while navigating" options={CHARACTERS} value={navCharacter} onChange={setNavCharacter} overMap={false} className="w-full [&>div]:w-full" />
+        <p className="caption-4 mt-2 text-muted-foreground">Marks your position while you follow directions.</p>
+      </Section>
+
       <Section title="Appearance">
         <SegmentedControl label="Theme" options={THEMES} value={mode} onChange={setMode} overMap={false} className="w-full [&>div]:w-full" />
         <p className="caption-5 mt-2 text-muted-foreground">Auto switches to night colours from {formatHour(18)} to {formatHour(6)}.</p>

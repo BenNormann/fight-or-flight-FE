@@ -44,6 +44,14 @@ describe('route adapter', () => {
   it('returns one route when both plans are the same line', () => {
     expect(parseRoutes({ safe, shortest: { ...shortest, geometry: safe.geometry } }).map((r) => r.kind)).toEqual(['safest'])
   })
+  it('cuts the straight hops between an off-path end and the walk network', () => {
+    const [route] = parseRoutes({ safe, shortest: { ...shortest, geometry: safe.geometry }, snap_m: [2, 40] })
+    // Start was on the network (2 m): kept. End was 40 m off it: the last hop is dropped.
+    expect(route!.path).toEqual([
+      [-118.2851, 34.0224],
+      [-118.2851, 34.0214],
+    ])
+  })
   it('rejects a body that is not a plan', () => {
     expect(() => parseRoutes({ safe })).toThrow()
   })

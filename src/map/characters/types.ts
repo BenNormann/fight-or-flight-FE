@@ -9,8 +9,11 @@ import type { NavCharacterId } from '@/domain'
  */
 export type Vec2 = [x: number, y: number]
 
-/** Which resolved colour a part takes (see `CharacterColors`). */
-export type CharacterTone = 'body' | 'accent'
+/**
+ * Which colour a part takes. `body` and `accent` follow the theme (see `CharacterColors`);
+ * any other name is a fixed model colour (wood, bronze, ...) from models.json.
+ */
+export type CharacterTone = 'body' | 'accent' | (string & {})
 
 export interface CharacterPart {
   /** Outer ring, unclosed, in design px. Concave is fine. */
@@ -32,6 +35,10 @@ export interface ExtrudedCharacter {
   iso: CharacterPart[]
   /** 3D: the full solid, lit by the map light, turns with the camera. */
   solid: CharacterPart[]
+  /** 2D: every part gets the background casing (a figure made of many parts), not only the first. */
+  outlineAll?: boolean
+  /** Walk cycle: one set of parts per frame, advanced every `strideM` metres travelled. */
+  walk?: { strideM: number; flat: CharacterPart[][]; solid: CharacterPart[][] }
 }
 
 /**

@@ -4,7 +4,8 @@
  */
 import type { Feature, FeatureCollection, Polygon } from 'geojson'
 import type { LngLat, MapMode } from '@/domain'
-import type { CharacterColors, ExtrudedCharacter, Vec2 } from './types'
+import { TONE_HEX } from './models'
+import type { CharacterColors, CharacterPart, ExtrudedCharacter, Vec2 } from './types'
 
 const EARTH_CIRCUMFERENCE_M = 40_075_016.686
 const M_PER_DEG = 111_320
@@ -44,17 +45,23 @@ export interface CharacterProps {
 
 export function characterFeatures(
   def: ExtrudedCharacter,
-  pose: { at: LngLat; headingDeg: number },
+  /** `progressM`: distance travelled, which steps a walking character through its frames. */
+  pose: { at: LngLat; headingDeg: number; progressM?: number },
   view: { zoom: number; mode: MapMode },
   colors: CharacterColors,
 ): FeatureCollection<Polygon, CharacterProps> {
   const m = metresPerPx(pose.at[1], view.zoom)
   const solid = view.mode !== '2d'
-  const parts = view.mode === '3d' ? def.solid : view.mode === 'iso' ? def.iso : def.flat
+  let parts: CharacterPart[] = view.mode === '3d' ? def.solid : view.mode === 'iso' ? def.iso : def.flat
+  if (def.walk) {
+    const frames = solid ? def.walk.solid : def.walk.flat
+    parts = frames[Math.floor(Math.max(0, pose.progressM ?? 0) / def.walk.strideM) % frames.length] ?? parts
+  }
+  const colorOf = (tone: string) => (tone === 'body' || tone === 'accent' ? colors[tone] : (TONE_HEX[tone] ?? colors.body))
   const features = parts.map(
     (p, i): Feature<Polygon, CharacterProps> => ({
       type: 'Feature',
-      properties: { color: colors[p.tone], solid, base: solid ? p.base * m : 0, height: solid ? p.height * m : 0, outline: i === 0 },
+      properties: { color: colorOf(p.tone), solid, base: solid ? p.base * m : 0, height: solid ? p.height * m : 0, outline: i === 0 || !!def.outlineAll },
       geometry: { type: 'Polygon', coordinates: [placeRing(p.ring, pose.at, pose.headingDeg, m)] },
     }),
   )

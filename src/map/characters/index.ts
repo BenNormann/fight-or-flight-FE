@@ -4,10 +4,12 @@
  */
 import type { NavCharacterId } from '@/domain'
 import { chevron } from './chevron'
+import { modelCharacters } from './models'
 import type { CharacterDef, ExtrudedCharacter } from './types'
 
 export const characters: Record<string, CharacterDef> = {
   [chevron.id]: chevron,
+  ...Object.fromEntries(modelCharacters.map((c) => [c.id, c])),
 }
 
 /** The character to draw for an id: unknown ids, and model characters (no renderer yet), fall back to the chevron. */

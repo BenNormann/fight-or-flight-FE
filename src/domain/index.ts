@@ -269,6 +269,13 @@ export interface NavProgress {
 /** Marker drawn at the traveller's position. More characters come later; ids are open-ended. */
 export type NavCharacterId = 'chevron' | (string & {})
 
+/** The characters a user can pick, in menu order. Ids match src/map/characters. */
+export const NAV_CHARACTERS: readonly { id: NavCharacterId; label: string }[] = [
+  { id: 'chevron', label: 'Arrow' },
+  { id: 'horse', label: 'Horse' },
+  { id: 'warrior', label: 'Trojan' },
+]
+
 export interface RouteRequest {
   from: LngLat
   to: LngLat

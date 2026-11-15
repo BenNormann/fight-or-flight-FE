@@ -23,12 +23,32 @@ const backendRoute = z.looseObject({
   no_data_pct: z.number().nullish(),
   n_phones: z.number().nullish(),
 })
-const backendPlan = z.looseObject({ safe: backendRoute, shortest: backendRoute })
+const backendPlan = z.looseObject({
+  safe: backendRoute,
+  shortest: backendRoute,
+  /** How far the requested start and end were from the walk network, in metres. */
+  snap_m: z.tuple([z.number(), z.number()]).nullish(),
+})
+
+/** An end this far (or more) off the walk network is not walked along a path: the map joins it with a dotted link instead. */
+const OFF_NETWORK_M = 8
 
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n))
 
-function toRoute(kind: RouteKind, r: z.infer<typeof backendRoute>): Route {
-  const path = r.geometry.coordinates.map((c) => [c[0], c[1]] as LngLat)
+/**
+ * The backend's line runs from the exact point asked for to the exact point asked for, so its first
+ * and last hops are straight jumps from a building's middle (or a field) onto the nearest path.
+ * Those hops are cut here: the route is the part on the walk network.
+ */
+function onNetwork(coords: LngLat[], snap: readonly [number, number] | null | undefined): LngLat[] {
+  let path = coords
+  if (snap && snap[0] >= OFF_NETWORK_M && path.length > 2) path = path.slice(1)
+  if (snap && snap[1] >= OFF_NETWORK_M && path.length > 2) path = path.slice(0, -1)
+  return path
+}
+
+function toRoute(kind: RouteKind, r: z.infer<typeof backendRoute>, snap?: readonly [number, number] | null): Route {
+  const path = onNetwork(r.geometry.coordinates.map((c) => [c[0], c[1]] as LngLat), snap)
   const mean = clamp01(r.mean_risk ?? 0)
   const warnings: string[] = []
   const highRiskM = r.high_risk_m ?? 0
@@ -52,8 +72,8 @@ function toRoute(kind: RouteKind, r: z.infer<typeof backendRoute>): Route {
 /** Fastest first, like the route cards. When both plans are the same line, only one route comes back. */
 export function parseRoutes(raw: unknown): Route[] {
   const plan = backendPlan.parse(raw)
-  const safest = toRoute('safest', plan.safe)
-  const fastest = toRoute('fastest', plan.shortest)
+  const safest = toRoute('safest', plan.safe, plan.snap_m)
+  const fastest = toRoute('fastest', plan.shortest, plan.snap_m)
   const same = safest.path.length === fastest.path.length && safest.path.every((p, i) => p[0] === fastest.path[i]![0] && p[1] === fastest.path[i]![1])
   return same ? [safest] : [fastest, safest]
 }
