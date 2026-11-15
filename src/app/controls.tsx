@@ -1,7 +1,8 @@
 import { CrosshairIcon, MinusIcon, NavigationArrowIcon, PlusIcon, ShieldCheckIcon, StackIcon } from '@phosphor-icons/react'
+import { useSyncExternalStore } from 'react'
 import { CATEGORIES } from '@/demo'
 import { cn } from '@/lib/cn'
-import { recenter, zoomIn, zoomOut } from '@/map/controller'
+import { getBearing, recenter, resetNorth, subscribeBearing, zoomIn, zoomOut } from '@/map/controller'
 import { useAppStore } from '@/state/store'
 import { Chip, ChipRow, IconButton, Keystone, SearchBar, CategoryIcon } from '@/ui'
 
@@ -52,12 +53,30 @@ export function CategoryChips({ className, overMap = true, bleed = true }: { cla
   )
 }
 
-/** Right side map controls: layers, locate, the small safety shortcut, and (desktop) zoom. */
+/** North-up needle: dark north half, muted south half. Not a brand mark. */
+function Needle({ bearing }: { bearing: number }) {
+  return (
+    <svg viewBox="0 0 20 20" aria-hidden className="size-5" style={{ transform: `rotate(${-bearing}deg)` }}>
+      <path d="M10 2 L13.5 10 H6.5 Z" fill="currentColor" />
+      <path d="M10 18 L6.5 10 H13.5 Z" className="fill-muted-foreground/60" />
+    </svg>
+  )
+}
+
+/** Shows only while the map is rotated; the needle points north; tap resets. */
+function CompassButton() {
+  const bearing = useSyncExternalStore(subscribeBearing, getBearing, () => 0)
+  if (Math.abs(bearing) < 0.5) return null
+  return <IconButton tone="float" label="Reset to north" icon={<Needle bearing={bearing} />} onClick={resetNorth} />
+}
+
+/** Right side map controls: compass (when rotated), layers, locate, the small safety shortcut, and (desktop) zoom. */
 export function ControlStack({ className, zoom = false }: { className?: string; zoom?: boolean }) {
   const openView = useAppStore((s) => s.openView)
   const view = useAppStore((s) => s.view)
   return (
     <div className={cn('pointer-events-none flex flex-col gap-2', className)}>
+      <CompassButton />
       <IconButton
         tone="float"
         label="Map layers"
