@@ -84,11 +84,9 @@ export function useSignOut() {
 }
 
 /** Safe and fastest walking routes from the backend planner. `null` request or `enabled: false`: idle. */
-export function useRoutes(req: RouteRequest | null, enabled = true, keepPrevious = false) {
+export function useRoutes(req: RouteRequest | null, enabled = true) {
   return useQuery({
     queryKey: req ? queryKeys.routes(req) : ['routes', 'idle'],
-    // A started trip re-planned from where the traveller is (a reroute) keeps its route until the new one arrives.
-    ...(keepPrevious ? { placeholderData: keepPreviousData } : {}),
     queryFn: async ({ signal }) => {
       try {
         return await fetchRoutes(req!, signal)
@@ -337,14 +335,16 @@ export function useDemoIncidents() {
   })
 }
 
-/** Simulate a crime. Planned routes are dropped from the cache, so the next plan avoids it. */
+/** Simulate a crime. Cached routes are marked stale, so the next plan avoids it. */
 export function useSimulateIncident() {
   const client = useQueryClient()
   return useMutation({
     mutationFn: ({ at, category }: { at: LngLat; category?: string }) => simulateIncident(at, category),
     onSuccess: (incident) => {
       client.setQueryData<SimulatedIncident[]>(queryKeys.demoIncidents, (prev) => [incident, ...(prev ?? []).filter((i) => i.id !== incident.id)])
-      void client.invalidateQueries({ queryKey: ['routes'] })
+      // Stale, not refetched: during a walk the route being followed must stay put until the reroute lands.
+      // When not walking, the caller refetches (src/app/useDemoIncidentWatcher.ts).
+      void client.invalidateQueries({ queryKey: ['routes'], refetchType: 'none' })
     },
   })
 }
@@ -355,7 +355,7 @@ export function useClearIncidents() {
     mutationFn: clearIncidents,
     onSuccess: () => {
       client.setQueryData<SimulatedIncident[]>(queryKeys.demoIncidents, [])
-      void client.invalidateQueries({ queryKey: ['routes'] })
+      void client.invalidateQueries({ queryKey: ['routes'], refetchType: 'none' })
     },
   })
 }

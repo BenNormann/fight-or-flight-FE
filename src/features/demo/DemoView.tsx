@@ -1,4 +1,5 @@
 import { ArrowUpIcon, MapPinIcon, PersonSimpleWalkIcon, SirenIcon, TrashIcon, VideoCameraIcon, XCircleIcon } from '@phosphor-icons/react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
 import { ApiError } from '@/api/client'
 import { useClearIncidents, useDemoIncidents, useDemoStatus, useSession, useSimulateIncident } from '@/api/queries'
@@ -36,6 +37,7 @@ export default function DemoView() {
   const incidents = useDemoIncidents().data ?? []
   const simulate = useSimulateIncident()
   const clear = useClearIncidents()
+  const client = useQueryClient()
   const categories = status.data?.categories.length ? status.data.categories : ['Robbery']
   const [category, setCategory] = useState(categories[0]!)
 
@@ -119,7 +121,13 @@ export default function DemoView() {
           title="Clear simulated crimes"
           subtitle={incidents.length ? `${incidents.length} active` : 'None active'}
           disabled={!served || !incidents.length || clear.isPending}
-          onClick={() => clear.mutate(undefined, { onError: (e) => notify({ id: 'demo-incident', title: 'Could not clear', description: failure(e) }) })}
+          onClick={() =>
+            clear.mutate(undefined, {
+              // Not walking: plan the routes on screen again without the crimes. A walk keeps its route.
+              onSuccess: () => (activeRouteId === null ? void client.invalidateQueries({ queryKey: ['routes'] }) : undefined),
+              onError: (e) => notify({ id: 'demo-incident', title: 'Could not clear', description: failure(e) }),
+            })
+          }
           data-testid="demo-clear"
         />
       </Section>

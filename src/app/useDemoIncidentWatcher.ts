@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef } from 'react'
 import { useDemoIncidents } from '@/api/queries'
 import type { LngLat, SimulatedIncident } from '@/domain'
@@ -5,7 +6,7 @@ import { demoMode } from '@/lib/demoMode'
 import { getLocation } from '@/lib/geo/location'
 import { bearingDeg, distanceM } from '@/lib/nav'
 import { useAppStore } from '@/state/store'
-import { rerouteFrom, useTrip } from '@/state/trip'
+import { rerouteFrom } from '@/state/trip'
 import { notify } from '@/ui'
 
 const SAFEST_ID = 'route-safest'
@@ -26,9 +27,8 @@ export function whereIs(incident: LngLat, from: LngLat, headingDeg?: number): st
  */
 export function useDemoIncidentWatcher() {
   const { data } = useDemoIncidents()
-  const trip = useTrip()
+  const client = useQueryClient()
   const seen = useRef<Set<string> | null>(null)
-  const awaitingReroute = useRef<{ routes: unknown } | null>(null)
 
   useEffect(() => {
     if (!demoMode || !data) return
@@ -44,30 +44,30 @@ export function useDemoIncidentWatcher() {
     const { nav, activeRouteId } = useAppStore.getState()
     const here = nav?.position ?? getLocation().fix?.lngLat
     const where = here ? whereIs(latest.lngLat, here, nav?.headingDeg) : 'nearby'
-    const rerouting = activeRouteId !== null && nav !== null && !nav.arrived
+    // Re-plan from where the traveller is (state/trip.ts keeps the current route until the new one arrives).
+    const rerouting =
+      activeRouteId !== null &&
+      nav !== null &&
+      !nav.arrived &&
+      rerouteFrom(nav.position, (outcome) => {
+        if (!outcome.ok) {
+          notify({ id: 'demo-incident', title: 'Could not find a way around it', description: outcome.message })
+          return
+        }
+        // Follow the safest plan (when the planner sends one route, the trip follows that one anyway).
+        const { activeRouteId: now, startRoute } = useAppStore.getState()
+        if (now !== SAFEST_ID) startRoute(SAFEST_ID)
+        notify({ id: 'demo-incident', title: 'Rerouted around the incident', description: 'The walk continues on the new route.' })
+      })
+    // Not walking: plan the routes on screen again, so they go around it too.
+    if (!rerouting) void client.invalidateQueries({ queryKey: ['routes'] })
     notify({
       id: 'demo-incident',
       politeness: 'alert',
       title: `${latest.category} reported ${where}`,
       description: rerouting ? 'Finding a route around it…' : 'Routes planned now will avoid it.',
     })
-    if (rerouting) {
-      awaitingReroute.current = { routes: trip.routes }
-      rerouteFrom(nav.position)
-    }
-    // trip.routes is read only as the "before" snapshot.
+    // `client` is stable.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data])
-
-  // The re-planned routes have arrived (a new list): follow the safest one.
-  useEffect(() => {
-    const pending = awaitingReroute.current
-    if (!pending || trip.routes === pending.routes || trip.status !== 'ready') return
-    awaitingReroute.current = null
-    const safest = trip.routes.find((r) => r.id === SAFEST_ID) ?? trip.routes[0]
-    if (!safest) return
-    const { activeRouteId, startRoute } = useAppStore.getState()
-    if (activeRouteId !== safest.id) startRoute(safest.id)
-    notify({ id: 'demo-incident', title: 'Rerouted around the incident', description: `New route: ${Math.round(safest.distanceM)} m to go.` })
-  }, [trip.routes, trip.status])
 }
