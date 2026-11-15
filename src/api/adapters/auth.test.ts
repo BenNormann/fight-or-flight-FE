@@ -12,6 +12,14 @@ describe('auth adapter', () => {
     expect(parseUser(userFixture)).toEqual({ id: 'dev-user-1', email: 'trojan.dev@usc.edu', name: 'Development user' })
   })
 
+  it('reads the backend /me shape (Google sub as id, null picture)', () => {
+    expect(parseUser({ id: '1098', email: 'tommy@usc.edu', name: 'Tommy Trojan', picture: null })).toEqual({
+      id: '1098',
+      email: 'tommy@usc.edu',
+      name: 'Tommy Trojan',
+    })
+  })
+
   it('accepts numeric ids and extra fields; rejects a user without email', () => {
     expect(parseUser({ id: 7, email: 'a@b.c', role: 'x' })).toEqual({ id: '7', email: 'a@b.c' })
     expect(() => parseUser({ id: 'x' })).toThrow()
@@ -90,5 +98,6 @@ describe('USC only', () => {
     expect(loginErrorMessage(null)).toBeNull()
     expect(loginErrorMessage('domain')).toMatch(/USC email/)
     expect(loginErrorMessage('<script>')).toBe('Sign in did not finish. Try again.')
+    expect(loginErrorMessage('unavailable')).toMatch(/not available/)
   })
 })

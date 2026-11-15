@@ -1,7 +1,7 @@
 /**
- * Auth adapter (PROPOSED contract, docs/BACKEND_CONTRACT.md "Auth and live location").
+ * Auth adapter (docs/BACKEND_CONTRACT.md "Auth"): Google sign-in on the backend, USC accounts only.
  * The session is an httpOnly cookie the FE never reads; it only asks `/me` who is signed in.
- * Paths live here once; change them here when the backend lands.
+ * Paths live here once.
  */
 import { z } from 'zod'
 import { ApiError, apiFetch, apiUrl } from '@/api/client'
@@ -34,6 +34,7 @@ export function loginErrorMessage(code: string | null | undefined): string | nul
   if (!code) return null
   if (code === 'domain') return `Use your USC email (@${ALLOWED_EMAIL_DOMAIN}) to sign in. Other accounts are not allowed.`
   if (code === 'cancelled' || code === 'access_denied') return 'Sign in was cancelled. Try again when you are ready.'
+  if (code === 'unavailable') return 'Sign in is not available right now. Try again later.'
   return 'Sign in did not finish. Try again.'
 }
 

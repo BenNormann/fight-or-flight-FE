@@ -17,6 +17,9 @@ const unavailable = new Set<CapabilityKey>()
 const listeners = new Set<() => void>()
 let version = 0
 
+/** Whether an endpoint has proved unserved this session (re-render via `useCapabilities`). */
+export const isUnavailable = (key: CapabilityKey) => unavailable.has(key)
+
 /** Call from a query's error path when `ApiError.notServed` is true. */
 export function markUnavailable(key: CapabilityKey) {
   if (unavailable.has(key)) return

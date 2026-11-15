@@ -5,7 +5,7 @@
 ## Setup
 
 - Flask 3 + flask-smorest, PostgreSQL/PostGIS/TimescaleDB. Local: `docker compose` → API on port **5000**.
-- Prefix **`/api/v1`**. CORS: any origin on `/api/*`. No auth for reads.
+- Prefix **`/api/v1`**. CORS: the FE origins in `FRONTEND_ORIGINS`, with credentials (see Auth). No auth for reads.
 - OpenAPI at `/api/openapi.json`, Swagger UI at `/api/docs` (parameters documented, response bodies not).
 - `bbox` = `minLng,minLat,maxLng,maxLat`. Times ISO-8601, UTC by default.
 - H3 resolution 9 for crime, streetlights, buildings, features (6,909 cells); resolution 6 for sun and weather (30 cells).
@@ -54,28 +54,30 @@ Buildings: 969,395 LA County footprints (LARIAC 2020) within ~16 km (10 miles) o
 4. Will POIs (blue lights) and events be served?
 5. Can response schemas be declared so `/api/openapi.json` documents the bodies?
 
-## Auth and live location (PROPOSED by the FE on 2026-11-14, not in the backend yet)
+## Auth (implemented on the backend: PR RithvikR1218/fight-or-flight-BE#4 into `backend-setup`, not merged yet)
 
-The backend has no auth today. The FE is built against this proposal behind one adapter each (`src/api/adapters/auth.ts`, `location.ts`), so the paths and shapes can change in one place. Mock mode simulates all of it.
+Google OpenID Connect, limited to `@usc.edu` Workspace accounts. Reads stay public. Backend docs: its README, section "Auth".
 
 | Method & path | Behaviour |
 |---|---|
-| `GET /api/v1/auth/login?next=<url>` | Full-page redirect to the OAuth provider. The FE navigates the browser here; it never sees provider credentials |
-| `GET /api/v1/auth/callback` | Provider returns here. Backend creates the session (httpOnly cookie) and redirects to `next` |
-| `GET /api/v1/auth/me` | `200 {id, email, name?, picture?}` when signed in, `401` otherwise |
+| `GET /api/v1/auth/login?next=<absolute FE url>` | Full-page redirect to Google (`hd=usc.edu` hint). `next` must be on an origin in the backend's `FRONTEND_ORIGINS`, else it becomes that list's first origin root |
+| `GET /api/v1/auth/callback` | Google returns here. Backend verifies the ID token, sets the session cookie and redirects to `next` |
+| `GET /api/v1/auth/me` | `200 {id, email, name, picture}` (`id` = Google `sub`, `name`/`picture` may be `null`), `401` when signed out. `Cache-Control: no-store` |
 | `POST /api/v1/auth/logout` | `204`, clears the session |
+| `GET /api/v1/auth/dev/login?email=&next=` | Only when the backend sets `AUTH_DEV_LOGIN=true` (local testing): signs in any `@usc.edu` address without Google. `404` otherwise. **Never called by the FE** |
+
+- Refused or failed sign-in redirects to the FE's `/login?error=<code>&next=<path>`. Codes: `domain` (not a verified `@usc.edu` Workspace account), `cancelled` (declined at Google), `failed` (state or token error), `unavailable` (backend has no Google client or `SECRET_KEY`).
+- Session: cookie `fof_session` (Flask signed cookie), httpOnly, 7 days, `SameSite=Lax` by default. FE on another site: the backend sets `SameSite=None; Secure`.
+- CORS on `/api/*` now names `FRONTEND_ORIGINS` (default `http://localhost:5173,http://localhost:4173`) and allows credentials. Any other origin, including a deployed FE, must be added there.
+- The backend serves no config endpoint, so the FE probes `/me` to learn whether auth is served (see `useSession`).
+
+### Live location (still PROPOSED, not in the backend)
+
+| Method & path | Behaviour |
+|---|---|
 | `POST /api/v1/location` (signed in) | Body `{lat, lng, accuracy_m, heading_deg?, speed_mps?, ts}` → `204`. `401` when signed out |
 
-Decided by the product owner (2026-11-14):
-- Sign-in is limited to `@usc.edu` accounts. The backend must enforce this; on rejection it should redirect to the FE's `/login?error=domain`.
-- The session is an httpOnly cookie. So CORS must name the FE origin and allow credentials (today it is `*`, which browsers reject with credentials), and with the FE on another origin the cookie needs `SameSite=None; Secure`.
-- The FE posts location every 10 seconds while active (may drop to 5), only while signed in and opted in.
-
-Still open for the backend team:
-1. Which OAuth provider (Google with a hosted-domain restriction? USC SSO?).
-2. `next` must be validated against an allow-list (open-redirect risk).
-3. Location retention, and who can read it.
-4. Which endpoints will require sign-in (routing only, or more)?
+The FE posts every 10 seconds while active (may drop to 5), only while signed in and opted in. Still open for the backend team: location retention and who can read it, and which other endpoints will require sign-in.
 
 ## FE status
 
@@ -86,3 +88,4 @@ Still open for the backend team:
 
 - 2026-11-14 (a): FE proposal replaced by the endpoint list supplied by the product owner.
 - 2026-11-14 (b): synced from backend source (`backend-setup`): added the `/api/v1` prefix, response shapes, `/buildings`, `/roads`, `/roads/graph`, `/observations/metrics`, `/incidents/hourly`, PMTiles layer details, and planned endpoints from `algorithm-init`.
+- 2026-11-14 (c): auth implemented on the backend (Google, USC only); contract updated from that code. Live location still proposed.
