@@ -10,11 +10,13 @@ import {
   NavigationArrowIcon,
   PersonSimpleWalkIcon,
   RulerIcon,
+  StairsIcon,
   WarningIcon,
 } from '@phosphor-icons/react'
 import { useRef, useState } from 'react'
 import type { Route } from '@/domain'
 import { cn } from '@/lib/cn'
+import { climbText, floorName } from '@/lib/floors'
 import { LOCATION_DENIED_HELP, requestLocation, useUserLocation } from '@/lib/geo/location'
 import { requestCompassPermission } from '@/lib/nav/compass'
 import { riskBands } from '@/lib/risk'
@@ -44,7 +46,8 @@ const MODES = [
 ] as const
 
 function RouteCard({ route, selected, onSelect, leaveAt }: { route: Route; selected: boolean; onSelect: () => void; leaveAt: string | null }) {
-  const title = route.kind === 'safest' ? 'Safest' : 'Fastest'
+  // "Lower risk", never "safest": the app compares estimates, it does not promise safety.
+  const title = route.kind === 'safest' ? 'Lower risk' : 'Fastest'
   return (
     <button
       type="button"
@@ -76,7 +79,7 @@ function RouteCard({ route, selected, onSelect, leaveAt }: { route: Route; selec
           {w}
         </span>
       ))}
-      {(route.highlights ?? (route.kind === 'safest' ? ['Stays on lit paths past emergency phones'] : [])).map((h) => (
+      {(route.highlights ?? (route.kind === 'safest' ? ['Favours lit paths and emergency phones'] : [])).map((h) => (
         <span key={h} className="caption-4 text-muted-foreground">
           {h}
         </span>
@@ -354,7 +357,22 @@ export default function DirectionsView() {
                     <RouteCard key={r.id} route={r} selected={r.id === chosen?.id} onSelect={() => setRouteKind(r.kind)} leaveAt={leaveAt} />
                   ))}
                 </div>
+                {to?.floor !== undefined ? (
+                  <p className="body-6 mt-3 flex items-start gap-2 rounded-2xl border border-border bg-card p-3" data-testid="floor-hop">
+                    <StairsIcon aria-hidden className="mt-0.5 size-5 shrink-0" />
+                    <span>
+                      <span className="title-3 block">
+                        Then inside: {floorName({ floor: to.floor, floorLabel: to.floorLabel })}
+                        {climbText(to.floor) ? ` · ${climbText(to.floor)!.toLowerCase()}` : ''}
+                      </span>
+                      <span className="text-muted-foreground">The route ends at the building. In Iso and 3D the floor is highlighted on the map.</span>
+                    </span>
+                  </p>
+                ) : null}
                 <RouteRiskLegend />
+                <p className="caption-5 mt-2 text-muted-foreground" data-testid="risk-disclaimer">
+                  Risk levels are estimates from reported incident data. They are not a guarantee of safety. In an emergency, call 911.
+                </p>
                 {!trip.live ? <p className="caption-5 mt-2 text-muted-foreground">Preview routes. Live routing is not connected yet.</p> : null}
                 {trip.live && travelMode !== 'walk' ? (
                   <p className="caption-5 mt-2 text-muted-foreground">Routes follow walking paths. Only the time changes with the travel mode.</p>

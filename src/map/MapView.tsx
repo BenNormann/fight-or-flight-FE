@@ -39,6 +39,7 @@ import {
 } from './camera'
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { followTraveller as resumeFollow, publishBearing, publishCentredOnUser, registerMapController } from './controller'
+import { floorHopFeatures } from './floorHop'
 import { POI_LAYER, POI_SOURCE, labelBlocks, gridCells, installPoiIcons, poiFeatures } from './poiIcons'
 import { chromeInsets } from './insets'
 import { installTouchTilt } from './touchTilt'
@@ -81,6 +82,8 @@ const characterColors = (theme: MapTheme): CharacterColors =>
 const followBearing = (mode: MapMode, headingDeg: number) => (mode === '3d' ? headingDeg : cameraPresets[mode].bearing)
 
 const NO_CELLS: BBox[] = []
+/** A new result list frames this many of its nearest places, not the whole list (which can span miles). */
+const FRAME_RESULTS = 8
 
 /** Within this distance of the user, the map counts as centred on them. */
 const RECENTER_TOGGLE_M = 40
@@ -129,7 +132,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   /** Map cells whose places are labelled; empty while zoomed out. Fixed squares, so moving the map reuses them. */
   const [poiCells, setPoiCells] = useState<BBox[]>(NO_CELLS)
   const [poiBlocks, setPoiBlocks] = useState(2)
-  const ambient = useAmbientPlaces(poiCells, poiBlocks)
+  /** A category chip is active (no typed query): the map shows that category only, highlighted, like the list beside it. */
+  // Still on while one of its places is open, so picking from the list does not bring everything else back.
+  const browsing = useAppStore((s) => ((s.view === 'search' || s.view === 'place') && !s.query.trim() ? s.category : null))
+  const ambient = useAmbientPlaces(poiCells, poiBlocks, mapPlaces.live ? browsing : null)
   const me = useMyPosition()
   const routeKind = useAppStore((s) => s.routeKind)
   const activeRouteId = useAppStore((s) => s.activeRouteId)
@@ -304,6 +310,41 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     }
   }, [map])
 
+  // ── Up the building: the destination room's floor, and the storeys to climb to it ──
+  const toFloor = trip.to?.floor
+  const toAt = trip.to?.lngLat
+  const routeEnd = routes.chosen?.path.at(-1)
+  useEffect(() => {
+    if (!ready || swapping.current) return
+    const clear = () => setData(map, 'fof-floor', EMPTY)
+    // Needs a room on a floor above ground, a route to its building, and walls to climb (not the flat 2D map).
+    if (toFloor === undefined || toFloor < 1 || !toAt || !routeEnd || mapMode === '2d') return clear()
+    map.setPaintProperty('fof-floor', 'fill-extrusion-color', cssVar('--selected'))
+    const draw = () => {
+      // The building under the destination, from whichever building layer is showing.
+      const hit = map
+        .queryRenderedFeatures(map.project(toAt), { layers: ['fof-buildings', 'fof-buildings-flat'].filter((id) => map.getLayer(id)) })
+        .find((f) => f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')
+      if (!hit) return false
+      const g = hit.geometry as GeoJSON.Polygon | GeoJSON.MultiPolygon
+      const ring = (g.type === 'Polygon' ? g.coordinates[0] : g.coordinates[0]?.[0]) ?? []
+      const p = hit.properties as Record<string, unknown>
+      const heightM = [p.height_m, p.render_height, p.height].find((v): v is number => typeof v === 'number' && v > 0) ?? 12
+      setData(map, 'fof-floor', floorHopFeatures(ring.map((c) => [c[0]!, c[1]!] as LngLat), heightM, toFloor, routeEnd))
+      return true
+    }
+    // The building's tile may still be loading, or off screen until the camera has framed the route.
+    if (draw()) return
+    clear()
+    const retry = () => {
+      if (draw()) map.off('idle', retry)
+    }
+    map.on('idle', retry)
+    return () => void map.off('idle', retry)
+    // `toAt` and `routeEnd` are compared by value below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ready, map, styleGen, toFloor, toAt?.[0], toAt?.[1], routeEnd?.[0], routeEnd?.[1], mapMode, theme])
+
   // Which area to label follows the camera, once it rests.
   useEffect(() => {
     if (!map) return
@@ -322,11 +363,14 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   // Place names and icons in the map. Results and the selection are pins already: not drawn twice.
   useEffect(() => {
     if (!ready || swapping.current) return
-    const pinned = new Set(mapPlaces.places.map((p) => p.id))
-    setData(map, POI_SOURCE, poiCells.length ? poiFeatures(ambient, pinned) : EMPTY)
+    // While browsing a category its places are these icons, not pins; only the selected place is a pin.
+    const pinned = new Set((browsing ? (mapPlaces.selected ? [mapPlaces.selected] : []) : mapPlaces.places).map((p) => p.id))
+    setData(map, POI_SOURCE, poiCells.length ? poiFeatures(ambient, pinned, !!browsing) : EMPTY)
+    // Browsing: every match keeps its icon even where they crowd. Otherwise icons give way until close in.
+    map.setLayoutProperty(POI_LAYER, 'icon-allow-overlap', browsing ? true : ['step', ['zoom'], false, 17, true])
     map.setPaintProperty(POI_LAYER, 'text-color', cssVar('--map-label'))
     map.setPaintProperty(POI_LAYER, 'text-halo-color', cssVar('--map-label-halo'))
-  }, [ready, map, styleGen, ambient, poiCells, mapPlaces.places, theme])
+  }, [ready, map, styleGen, ambient, poiCells, mapPlaces.places, mapPlaces.selected, browsing, theme])
 
   // Category icons are images in the style: redraw them for each style (theme) load.
   useEffect(() => {
@@ -334,6 +378,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     const gen = styleGen
     void installPoiIcons(map, // Light disc on the night map, dark disc by day: the icons must stand out from the buildings under them.
       { disc: cssVar('--foreground'), glyph: cssVar('--background'), ring: cssVar('--background') }, () => !swapping.current && gen === styleGenRef.current)
+    // The highlighted set, for the category being browsed: cardinal by day, gold at night.
+    void installPoiIcons(map, { disc: cssVar('--selected'), glyph: cssVar('--selected-foreground'), ring: cssVar('--background') }, () => !swapping.current && gen === styleGenRef.current, true)
   }, [ready, map, styleGen])
 
   const heat = useMemo(() => demoRiskCells(), [])
@@ -370,13 +416,13 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     [breakpoint, sheetSnap, panelOpen, routeActive, viewportW, viewportH],
   )
   const selectedPlaceKey = mapPlaces.selected ? `${mapPlaces.selected.id}@${mapPlaces.selected.lngLat.join(',')}` : ''
-  const resultsKey = mapPlaces.places.slice(0, 8).map((p) => p.id).join('|')
+  const resultsKey = mapPlaces.places.slice(0, FRAME_RESULTS).map((p) => p.id).join('|')
   const fit = useMemo(() => {
     const known = fitPoints(routes, selection)
     if (known) return known
-    // A backend place: frame it. A fresh list of results: frame the nearest few.
+    // A backend place: frame it. A fresh list of results (a search, a category): frame the nearest few.
     if (mapPlaces.selected) return { kind: 'place' as const, points: [mapPlaces.selected.lngLat] }
-    if (!selection && mapPlaces.places.length) return { kind: 'results' as const, points: mapPlaces.places.slice(0, 8).map((p) => p.lngLat) }
+    if (!selection && mapPlaces.places.length) return { kind: 'results' as const, points: mapPlaces.places.slice(0, FRAME_RESULTS).map((p) => p.lngLat) }
     return null
     // Keyed by WHAT is framed, not by object identity: the same place or result list arriving again
     // (detail loaded, a refetch) must not pull the camera back after the user moved it.
@@ -416,7 +462,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       padding,
       absolutePadding: true,
       bearing: pose.bearing,
-      maxZoom: target.kind === 'place' ? Math.max(map.getZoom(), 17) : 18,
+      // Results: wide enough to take them in as a group, never so tight that two neighbours fill the screen.
+      maxZoom: target.kind === 'place' ? Math.max(map.getZoom(), 17) : target.kind === 'results' ? 16.5 : 18,
     })
     if (!cam) return
     // The fit already accounts for padding; keep only the chrome insets as the map's padding.
@@ -643,10 +690,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     // While navigating, the traveller replaces the "you are here" dot.
     () => [
       ...pinSpecs(me, selectedId, (id) => overrides[id] ?? demoLayerDefaults[id] ?? false).filter((p) => (livePlaces ? p.kind === 'origin' : true) && (!navLive || p.kind !== 'origin')),
-      ...placePins(mapPlaces.places, selectedId),
+      ...placePins(browsing ? (mapPlaces.selected ? [mapPlaces.selected] : []) : mapPlaces.places, selectedId),
       ...tripPins({ from: origin === null ? null : trip.from, to: trip.to, show: planning || navLive }),
     ],
-    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, planning, livePlaces, mapPlaces.places],
+    [me, selectedId, overrides, navLive, origin, trip.from, trip.to, planning, livePlaces, mapPlaces.places, mapPlaces.selected, browsing],
   )
 
   return (
@@ -688,7 +735,7 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
   const add = (layer: maplibregl.AddLayerObject) => {
     if (!map.getLayer(layer.id)) map.addLayer(layer, anchor)
   }
-  for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char', POI_SOURCE]) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
+  for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char', 'fof-floor', POI_SOURCE]) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
   const arrow = arrowImage(cssVar('--background'))
   if (map.hasImage(NAV_ARROW)) map.updateImage(NAV_ARROW, arrow)
   else map.addImage(NAV_ARROW, arrow, { pixelRatio: 2 })
@@ -760,6 +807,14 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
   add({ id: 'fof-place-ring', type: 'line', source: 'fof-places', filter: ['==', ['get', 'selected'], true], paint: { 'line-width': 2 } })
 
   const round = { 'line-join': 'round', 'line-cap': 'round' } as const
+  // The destination room's floor (a band round the building) and the hops up to it. Only where buildings are extruded.
+  add({
+    id: 'fof-floor',
+    type: 'fill-extrusion',
+    source: 'fof-floor',
+    minzoom: BUILDINGS_EXTRUDE_ZOOM,
+    paint: { 'fill-extrusion-color': cssVar('--selected'), 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-opacity': 0.9 },
+  })
   // Dotted link from the route's end on the street to the place itself (a building's middle, a pin in a field).
   add({ id: 'fof-route-link', type: 'line', source: 'fof-routes', layout: round, filter: ['==', ['get', 'role'], 'link'], paint: { 'line-width': 4, 'line-dasharray': [0.1, 2] } })
   add({ id: 'fof-route-alt', type: 'line', source: 'fof-routes', layout: round, filter: ['==', ['get', 'role'], 'alt'], paint: { 'line-width': 5, 'line-opacity': 0.55 } })

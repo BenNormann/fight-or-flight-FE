@@ -32,6 +32,13 @@ const backendPlace = z.looseObject({
   rating: num,
   review_count: num,
   open_now: z.boolean().nullish(),
+  // Rooms (`kind: "room"`).
+  floor: z.number().nullish(),
+  floor_label: z.union([z.string(), z.number()]).nullish(),
+  building_id: text,
+  building_name: text,
+  pathing: z.boolean().nullish(),
+  verified: z.boolean().nullish(),
 })
 
 const clean = (s: string | null | undefined) => (s && s.trim() ? s.trim() : undefined)
@@ -54,6 +61,19 @@ function toPlace(p: z.infer<typeof backendPlace>): Place {
     ...(p.rating != null && p.rating > 0 ? { rating: p.rating } : {}),
     ...(p.review_count != null && p.review_count > 0 ? { reviewCount: p.review_count } : {}),
     ...(p.open_now != null ? { openNow: p.open_now } : {}),
+    ...(p.kind === 'room'
+      ? {
+          room: {
+            floor: p.floor ?? null,
+            floorLabel: p.floor_label != null ? String(p.floor_label) : undefined,
+            buildingId: clean(p.building_id),
+            buildingName: clean(p.building_name),
+            // Floor routing needs a floor: never offered without one, whatever the flag says.
+            pathing: p.pathing === true && p.floor != null,
+            verified: p.verified !== false,
+          },
+        }
+      : {}),
   }
 }
 

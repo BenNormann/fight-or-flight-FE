@@ -87,7 +87,7 @@ export default function NavigationView() {
   const desktop = useBreakpoint() === 'desktop'
   if (!trip) return null
   const m = navModel(trip, nav)
-  const kind = trip.route.kind === 'safest' ? 'Safest route' : 'Fastest route'
+  const kind = trip.route.kind === 'safest' ? 'Lower-risk route' : 'Fastest route'
 
   return (
     <div data-testid="view-navigation">

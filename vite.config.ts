@@ -19,7 +19,7 @@ export default defineConfig(({ mode }) => {
         manifest: {
           name: 'Odyssey',
           short_name: 'Odyssey',
-          description: 'USC campus map with safe walking directions',
+          description: 'USC campus map with risk-aware walking directions',
           display: 'standalone',
           orientation: 'portrait',
           background_color: '#0b0d10',

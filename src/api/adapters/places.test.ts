@@ -12,6 +12,13 @@ describe('places adapter', () => {
     expect(out[1]).not.toHaveProperty('openNow')
     expect(out[1]).not.toHaveProperty('distanceM')
   })
+  it('maps a room: floor, building and whether floor routing applies', () => {
+    const room = { id: 'room:THH-201', kind: 'room', name: 'THH 201', lat: 34.0222, lng: -118.2845, floor: 2, floor_label: '2', building_id: 'bldg:THH', building_name: 'Mark Taper Hall', pathing: true, verified: false }
+    const [a, b] = parseSearch({ results: [room, { ...room, id: 'room:X', floor: null, pathing: true }] })
+    expect(a!.room).toEqual({ floor: 2, floorLabel: '2', buildingId: 'bldg:THH', buildingName: 'Mark Taper Hall', pathing: true, verified: false })
+    expect(b!.room).toMatchObject({ floor: null, pathing: false })
+    expect(parseSearch({ results: [row] })[0]).not.toHaveProperty('room')
+  })
   it('labels categories, falling back to the id', () => {
     expect(parseCategories([{ id: 'cafe', label: 'Cafes', count: 3, types: [] }, { id: 'bubble_tea', label: null, count: null }])).toEqual([
       { id: 'cafe', label: 'Cafes', count: 3 },

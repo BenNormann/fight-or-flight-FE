@@ -56,7 +56,8 @@ const GLYPHS: Record<string, Icon> = {
 
 export const POI_SOURCE = 'fof-poi'
 export const POI_LAYER = 'fof-poi'
-const imageId = (category: string) => `fof-poi-${category in GLYPHS ? category : 'other'}`
+/** `highlighted`: the brand-coloured set, for the category the user is browsing. */
+const imageId = (category: string, highlighted = false) => `fof-poi-${highlighted ? 'hl-' : ''}${category in GLYPHS ? category : 'other'}`
 
 const SIZE = 22
 const RATIO = 2
@@ -87,12 +88,12 @@ async function drawIcon(Glyph: Icon, colors: { disc: string; glyph: string; ring
  * Add every category icon to the current style. Async (SVG decode); `stillCurrent` guards
  * against the style having been swapped (theme change) while the images were drawn.
  */
-export async function installPoiIcons(map: MlMap, colors: { disc: string; glyph: string; ring: string }, stillCurrent: () => boolean) {
+export async function installPoiIcons(map: MlMap, colors: { disc: string; glyph: string; ring: string }, stillCurrent: () => boolean, highlighted = false) {
   await Promise.all(
     Object.entries(GLYPHS).map(async ([category, Glyph]) => {
       const data = await drawIcon(Glyph, colors).catch(() => null)
       if (!data || !stillCurrent()) return
-      const id = imageId(category)
+      const id = imageId(category, highlighted)
       if (map.hasImage(id)) map.updateImage(id, data)
       else map.addImage(id, data, { pixelRatio: RATIO })
     }),
@@ -102,13 +103,13 @@ export async function installPoiIcons(map: MlMap, colors: { disc: string; glyph:
 type PoiProps = { id: Id; name: string; icon: string; rank: number }
 
 /** GeoJSON for the place layer. `skip`: places already shown as pins (results, the selection). */
-export function poiFeatures(places: Place[], skip: ReadonlySet<Id> = new Set()): FeatureCollection<Point, PoiProps> {
+export function poiFeatures(places: Place[], skip: ReadonlySet<Id> = new Set(), highlighted = false): FeatureCollection<Point, PoiProps> {
   const features = places
     .filter((p) => !skip.has(p.id))
     .map((p): Feature<Point, PoiProps> => ({
       type: 'Feature',
       // Better known places win a label when two collide (MapLibre places lower sort keys first).
-      properties: { id: p.id, name: p.name, icon: imageId(p.category ?? 'other'), rank: -placeRank(p) },
+      properties: { id: p.id, name: p.name, icon: imageId(p.category ?? 'other', highlighted), rank: -placeRank(p) },
       geometry: { type: 'Point', coordinates: p.lngLat },
     }))
   return { type: 'FeatureCollection', features }

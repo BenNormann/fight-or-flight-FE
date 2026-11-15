@@ -21,6 +21,9 @@ export interface TripPlace {
   id: Id | null
   name: string
   lngLat: LngLat
+  /** The destination is a room on this floor of the building at `lngLat`, and floor routing applies. */
+  floor?: number
+  floorLabel?: string
 }
 
 /**
@@ -80,7 +83,9 @@ function useTripPlace(id: Id | null): TripPlace | null {
     if (pin) return { id, name: pinName ?? 'Dropped pin', lngLat: pin }
     if (local) return local
     const place = fetched ?? seen
-    return place ? { id, name: place.name, lngLat: place.lngLat } : null
+    if (!place) return null
+    const room = place.room?.pathing && place.room.floor != null ? { floor: place.room.floor, floorLabel: place.room.floorLabel } : {}
+    return { id, name: place.name, lngLat: place.lngLat, ...room }
     // `pin` is derived from `id`; its identity changes every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, pinName, local?.id, fetched, seen])

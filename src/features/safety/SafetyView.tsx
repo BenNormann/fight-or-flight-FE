@@ -29,7 +29,7 @@ export default function SafetyView() {
 
   return (
     <div data-testid="view-safety">
-      <ViewHeader title="Safety" subtitle="Help and safer ways to get around campus" onBack={back} />
+      <ViewHeader title="Safety" subtitle="Help and lower-risk ways to get around campus" onBack={back} />
       <Card className="flex items-center gap-3">
         <span aria-hidden className="grid size-10 shrink-0 place-items-center rounded-lg bg-muted">
           <SirenIcon className="size-5" />
@@ -48,11 +48,11 @@ export default function SafetyView() {
         </button>
       </Card>
 
-      <Section className="mt-6" title="Get there safely">
+      <Section className="mt-6" title="Getting there">
         <ListRow
           icon={<PathIcon />}
-          title="Safest route to a building"
-          subtitle="Lit paths past emergency phones"
+          title="Lower-risk route to a building"
+          subtitle="Favours lit paths and emergency phones"
           onClick={() => {
             setRouteKind('safest')
             directionsTo(null)

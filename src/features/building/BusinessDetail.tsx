@@ -1,7 +1,8 @@
-import { GlobeIcon, MapPinIcon, NavigationArrowIcon, PhoneIcon, ShareNetworkIcon, StarIcon } from '@phosphor-icons/react'
+import { BuildingsIcon, GlobeIcon, MapPinIcon, NavigationArrowIcon, PhoneIcon, ShareNetworkIcon, StarIcon } from '@phosphor-icons/react'
 import { useState } from 'react'
 import { WEEKDAYS, type Id, type OpenSpan, type PlaceDetail, type Weekday } from '@/domain'
 import { cn } from '@/lib/cn'
+import { climbText, floorName } from '@/lib/floors'
 import { distanceText } from '@/lib/units'
 import { usePlaceById } from '@/state/places'
 import { useAppStore } from '@/state/store'
@@ -66,6 +67,7 @@ function Rating({ rating, reviewCount }: { rating: number; reviewCount?: number 
 export function BusinessDetail({ id }: { id: Id }) {
   const back = useAppStore((s) => s.back)
   const directionsTo = useAppStore((s) => s.directionsTo)
+  const select = useAppStore((s) => s.select)
   const { place, detail, loading, missing } = usePlaceById(id)
   const [photoFailed, setPhotoFailed] = useState(false)
 
@@ -114,12 +116,24 @@ export function BusinessDetail({ id }: { id: Id }) {
         subtitle={
           <>
             <OpenLine openNow={detail?.openNow ?? place.openNow} hours={detail?.hours} />
+            {place.room ? (
+              <span className="block text-foreground" data-testid="place-floor">
+                {[floorName(place.room), place.room.floor != null ? climbText(place.room.floor) : null, place.room.buildingName ? `in ${place.room.buildingName}` : null].filter(Boolean).join(' · ')}
+                {place.room.verified ? null : <span className="text-muted-foreground"> (floor unconfirmed)</span>}
+              </span>
+            ) : null}
             {place.address ? <span className="block">{place.address}</span> : null}
           </>
         }
         onBack={back}
       />
       <ActionBar actions={actions} />
+
+      {place.room?.buildingId ? (
+        <Button className="mt-4" icon={<BuildingsIcon />} onClick={() => select({ kind: 'place', id: place.room!.buildingId! })}>
+          {place.room.buildingName ?? 'Open the building'}
+        </Button>
+      ) : null}
 
       {detail?.photoUrl && !photoFailed ? (
         <img

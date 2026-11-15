@@ -8,6 +8,7 @@ import { recallPlace, useLiveSearch, usePlace, usePlaceCategories, usePlaceSearc
 // DEMO: sample places while the backend has none (docs/BACKEND_CONTRACT.md).
 import { CAMPUS_CENTER, CATEGORIES, demoSearch } from '@/demo'
 import type { BBox, Place, SearchResult } from '@/domain'
+import { floorName } from '@/lib/floors'
 import { distanceText } from '@/lib/units'
 import { useAppStore } from './store'
 import { useMyPosition } from './trip'
@@ -53,7 +54,13 @@ export function useCategoryChips(): CategoryChip[] {
   }, [data])
 }
 
-const placeLine = (p: Place) => [p.subcategory?.replace(/_/g, ' '), p.address].filter(Boolean).join(' · ') || undefined
+const placeLine = (p: Place) =>
+  (p.room
+    ? [p.room.buildingName, floorName(p.room), p.room.verified ? null : 'floor unconfirmed']
+    : [p.subcategory?.replace(/_/g, ' '), p.address]
+  )
+    .filter(Boolean)
+    .join(' · ') || undefined
 
 export const placeToResult = (p: Place): SearchResult => ({
   kind: 'place',
@@ -157,10 +164,12 @@ export function pickEvenly(places: Place[], [w, s, e, n]: BBox, blocks = BLOCKS,
  * `blocks`: how finely each cell is divided when choosing labels. 0 = zoomed out (large cells, a couple
  * of places each); 2, 4, 8 = closer and closer in, until every place in view has a label.
  */
-export function useAmbientPlaces(cells: BBox[], blocks = BLOCKS): Place[] {
-  const detailed = blocks > 0
+export function useAmbientPlaces(cells: BBox[], blocks = BLOCKS, only: string | null = null): Place[] {
+  // Browsing one category: that category alone, and every place of it (bike racks included: the list shows them too).
+  const detailed = blocks > 0 || !!only
   const { data: categories } = usePlaceCategories()
   const groups = useMemo(() => {
+    if (only) return [only]
     const ids = (categories ?? []).map((c) => c.id).filter((id) => !UNLABELLED.has(id))
     const campus = ids.filter((id) => CAMPUS_GROUP.includes(id))
     const rest = ids.filter((id) => !CAMPUS_GROUP.includes(id) && id !== 'parking')
@@ -168,14 +177,14 @@ export function useAmbientPlaces(cells: BBox[], blocks = BLOCKS): Place[] {
     // Zoomed out, a cell is a neighbourhood: one request for everything but parking, and only its best-known places show.
     if (!detailed) return [ids.filter((id) => id !== 'parking').join(',')].filter(Boolean)
     return [campus, rest, ids.filter((id) => id === 'parking')].filter((g) => g.length).map((g) => g.join(','))
-  }, [categories, detailed])
+  }, [categories, detailed, only])
   const perCell = usePlacesInCells(groups.length ? cells : NO_CELLS, groups)
   return useMemo(() => {
     const seen = new Set<string>()
-    return perCell.flatMap((places, i) => (detailed ? pickEvenly(places, cells[i]!, blocks) : pickEvenly(places, cells[i]!, 1, WIDE_PER_CELL)).filter((p) => !seen.has(p.id) && seen.add(p.id)))
+    return perCell.flatMap((places, i) => (only ? places : detailed ? pickEvenly(places, cells[i]!, blocks) : pickEvenly(places, cells[i]!, 1, WIDE_PER_CELL)).filter((p) => !seen.has(p.id) && seen.add(p.id)))
     // `cells` and `perCell` change together.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [perCell, blocks])
+  }, [perCell, blocks, only])
 }
 const NO_CELLS: BBox[] = []
 

@@ -148,6 +148,22 @@ export interface Place {
   rating?: number
   reviewCount?: number
   openNow?: boolean
+  /** Present when the place is a room inside a building (`kind: 'room'`). */
+  room?: RoomInfo
+}
+
+/** Where a room sits in its building. Its `lngLat` is the building's centre: route to the building, then use the floor. */
+export interface RoomInfo {
+  /** 1, 2, 3 are numbered floors; 0 is a ground level below floor 1; -1 basement; -2 sub-basement. Null: unknown. */
+  floor: number | null
+  /** The floor as signs show it: "1", "B", "LL". */
+  floorLabel?: string
+  buildingId?: Id
+  buildingName?: string
+  /** Floor routing may be offered (a campus building with a known floor). */
+  pathing: boolean
+  /** False: the floor was worked out from the room number, not confirmed. */
+  verified: boolean
 }
 
 export const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const
