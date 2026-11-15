@@ -279,8 +279,9 @@ export interface ActionItem {
 
 /** Google Maps style row of pill actions; scrolls with the same edge fade as the chip row. */
 export function ActionBar({ actions, className }: { actions: ActionItem[]; className?: string }) {
+  // The row scrolls sideways, which clips anything outside it: the bottom padding is room for the primary button's shadow.
   return (
-    <ScrollFade className={cn('-mx-gutter -my-2 flex gap-2 px-gutter py-2 scroll-px-4', className)}>
+    <ScrollFade className={cn('-mx-gutter -mt-2 -mb-6 flex gap-2 px-gutter pt-2 pb-6 scroll-px-4', className)}>
       {actions.map((a) => (
         <button
           key={a.id}

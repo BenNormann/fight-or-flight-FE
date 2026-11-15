@@ -2,9 +2,9 @@
  * All TanStack Query hooks and query keys. UI and map code get server data only from here,
  * always as domain types.
  */
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useSyncExternalStore } from 'react'
-import type { Id, LngLat, LocationFix, Place, RouteRequest, User } from '@/domain'
+import type { BBox, Id, LngLat, LocationFix, Place, RouteRequest, User } from '@/domain'
 import { env } from '@/lib/env'
 import { ApiError } from './client'
 import { fetchMe, logout } from './adapters/auth'
@@ -23,6 +23,7 @@ export const queryKeys = {
   placeCategories: ['places', 'categories'] as const,
   placeSearch: (q: string, category: string | null, near: LngLat | null) => ['places', 'search', q, category, near] as const,
   place: (id: Id) => ['places', 'detail', id] as const,
+  placesInBox: (box: BBox, categories: string) => ['places', 'box', box, categories] as const,
   reverse: (at: LngLat) => ['places', 'reverse', at] as const,
 }
 
@@ -153,6 +154,43 @@ export function usePlaceSearch(q: string, category: string | null, near: LngLat 
   })
   return query
 }
+
+/** The backend's cap on one search. */
+const CELL_LIMIT = 50
+
+/**
+ * Places inside each map cell, for labels on the map: cached requests per cell, so the same cell
+ * always gives the same places however the map got there. A search returns at most 50 places, the
+ * nearest first, and a busy campus cell holds more than that: so each cell is asked once per
+ * category group, which keeps one crowded kind from using up the whole answer.
+ * Returns what has loaded so far, one merged list per cell.
+ */
+export function usePlacesInCells(cells: BBox[], groups: string[]): Place[][] {
+  return useQueries({
+    queries: cells.flatMap((cell) =>
+      groups.map((categories) => ({
+        queryKey: queryKeys.placesInBox(cell, categories),
+        queryFn: async ({ signal }: { signal: AbortSignal }) => {
+          const [w, s, e, n] = cell
+          const places = await searchPlaces({ category: categories, bbox: cell, near: [(w + e) / 2, (s + n) / 2], limit: CELL_LIMIT }, signal)
+          rememberPlaces(places)
+          return places
+        },
+        staleTime: 30 * 60_000,
+        retry: false,
+      })),
+    ),
+    combine: (results) => {
+      const perCell: Place[][] = []
+      for (let c = 0; c < cells.length; c++) {
+        const lists = results.slice(c * groups.length, (c + 1) * groups.length).map((q) => q.data ?? NO_PLACES)
+        perCell.push(lists.every((l) => l.length === 0) ? NO_PLACES : lists.flat())
+      }
+      return perCell
+    },
+  })
+}
+const NO_PLACES: Place[] = []
 
 /** One place in full. A search result seen earlier shows at once while the detail loads. */
 export function usePlace(id: Id | null, enabled = true) {

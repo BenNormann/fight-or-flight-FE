@@ -30,14 +30,24 @@ export function shownRoutes(routes: Route[], opts: { activeRouteId: Id | null; d
   return { chosen, others: routes.filter((r) => r !== chosen) }
 }
 
-type RouteProps = { role: 'alt' | 'done' | 'casing' | 'segment'; color?: string; label?: string }
+type RouteProps = { role: 'alt' | 'done' | 'casing' | 'segment' | 'link'; color?: string; label?: string }
+
+/** A route ends on the street network; closer than this to the place itself needs no connector. */
+const LINK_MIN_M = 8
+const apartM = (a: LngLat, b: LngLat) => Math.hypot((b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180), b[1] - a[1]) * 111_320
 
 /**
  * Route lines. With `progressM` (navigating), the chosen route splits there:
  * the travelled part is one dimmed `done` line, the remaining part keeps the
  * casing and the risk-coloured segments.
  */
-export function routeFeatures({ chosen, others }: ShownRoutes, palette: RiskPalette, progressM: number | null = null): FeatureCollection<LineString, RouteProps> {
+export function routeFeatures(
+  { chosen, others }: ShownRoutes,
+  palette: RiskPalette,
+  progressM: number | null = null,
+  /** The places the trip really starts and ends at: a dotted link joins each to the route's end on the street. */
+  ends: { from?: LngLat | null; to?: LngLat | null } = {},
+): FeatureCollection<LineString, RouteProps> {
   const line = (path: LngLat[], props: RouteProps): Feature<LineString, RouteProps> => ({
     type: 'Feature',
     properties: props,
@@ -46,7 +56,15 @@ export function routeFeatures({ chosen, others }: ShownRoutes, palette: RiskPale
   const p = progressM ?? 0
   const { done, ahead } = chosen ? splitAt(chosen.path, p) : { done: [], ahead: [] }
   const segments = chosen ? (p > 0 ? aheadPieces(chosen.segments, p) : chosen.segments) : []
+  const links: Feature<LineString, RouteProps>[] = []
+  if (chosen && chosen.path.length >= 2) {
+    const first = chosen.path[0]!
+    const last = chosen.path[chosen.path.length - 1]!
+    if (ends.from && apartM(ends.from, first) >= LINK_MIN_M) links.push(line([ends.from, first], { role: 'link' }))
+    if (ends.to && apartM(ends.to, last) >= LINK_MIN_M) links.push(line([last, ends.to], { role: 'link' }))
+  }
   const features = [
+    ...links,
     ...others.map((r) => line(r.path, { role: 'alt' })),
     ...(done.length >= 2 ? [line(done, { role: 'done' })] : []),
     ...(ahead.length >= 2 ? [line(ahead, { role: 'casing' })] : []),

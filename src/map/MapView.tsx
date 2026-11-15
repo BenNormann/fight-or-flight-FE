@@ -12,12 +12,12 @@ import { useAppConfig } from '@/api/queries'
 // DEMO: sample places, routes and heat at real coordinates. Replace with adapters when the backend serves them.
 import { CAMPUS_CENTER, ORIGIN, buildings, demoLayerDefaults, SAFETY_HEAT_LAYER } from '@/demo'
 import { demoRiskCells } from '@/demo/heat'
-import type { AppConfig, LngLat, MapMode } from '@/domain'
+import type { AppConfig, BBox, LngLat, MapMode } from '@/domain'
 import { env } from '@/lib/env'
 import { LOCATION_DENIED_HELP, getLocation, requestLocation } from '@/lib/geo/location'
 import { pinId } from '@/lib/pin'
 import { useAppStore } from '@/state/store'
-import { useMapPlaces } from '@/state/places'
+import { useAmbientPlaces, useMapPlaces } from '@/state/places'
 import { useMyPosition, useTrip } from '@/state/trip'
 import { Keystone, PlaceIcon, notify, useBreakpoint, useTheme, useViewportHeight } from '@/ui'
 import { DEV_FALLBACK_STYLE, buildMapStyle, type MapTheme } from './basemap'
@@ -39,6 +39,7 @@ import {
 } from './camera'
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { followTraveller as resumeFollow, publishBearing, registerMapController } from './controller'
+import { POI_LAYER, POI_SOURCE, labelBlocks, gridCells, installPoiIcons, poiFeatures } from './poiIcons'
 import { chromeInsets } from './insets'
 import { installTouchTilt } from './touchTilt'
 import { fitPoints, heatFeatures, navFeatures, pinSpecs, placeFeatures, routeFeatures, placePins, shownRoutes, tripPins, type PinSpec, type RiskPalette } from './overlays'
@@ -78,6 +79,12 @@ const characterColors = (theme: MapTheme): CharacterColors =>
 
 /** Follow camera: north-up in 2D and Iso (their fixed bearing), heading-up in 3D. */
 const followBearing = (mode: MapMode, headingDeg: number) => (mode === '3d' ? headingDeg : cameraPresets[mode].bearing)
+
+const NO_CELLS: BBox[] = []
+
+/** Within this distance of the user, the map counts as centred on them. */
+const RECENTER_TOGGLE_M = 40
+const metresApart = (a: LngLat, b: LngLat) => Math.hypot((b[0] - a[0]) * Math.cos((a[1] * Math.PI) / 180), b[1] - a[1]) * 111_320
 
 /** A tap this close to the traveller counts as a tap on it (a finger, not a cursor). */
 const TRAVELLER_TAP_PX = 36
@@ -119,6 +126,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const planning = useAppStore((s) => s.view === 'directions' || (s.view === 'layers' && s.layersOverDirections))
   const trip = useTrip()
   const mapPlaces = useMapPlaces()
+  /** Map cells whose places are labelled; empty while zoomed out. Fixed squares, so moving the map reuses them. */
+  const [poiCells, setPoiCells] = useState<BBox[]>(NO_CELLS)
+  const [poiBlocks, setPoiBlocks] = useState(2)
+  const ambient = useAmbientPlaces(poiCells, poiBlocks)
   const me = useMyPosition()
   const routeKind = useAppStore((s) => s.routeKind)
   const activeRouteId = useAppStore((s) => s.activeRouteId)
@@ -137,6 +148,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
   const [styleGen, setStyleGen] = useState(0)
   /** True between `setStyle` and its `style.load`: the style is not usable yet. */
   const swapping = useRef(false)
+  const styleGenRef = useRef(0)
+  useEffect(() => {
+    styleGenRef.current = styleGen
+  }, [styleGen])
   const [buildingSrc, setBuildingSrc] = useState<'pending' | 'basemap' | string>('pending')
 
   const live = useRef({ mapMode, reduce, me })
@@ -239,7 +254,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       if (!ready || swapping.current) return
       const t = traveller.current
       const progress = navRoute ? (t?.progressM ?? 0) : null
-      setData(map, 'fof-routes', routeFeatures(routes, riskPalette(), progress))
+      setData(map, 'fof-routes', routeFeatures(routes, riskPalette(), progress, { from: trip.from?.lngLat, to: trip.to?.lngLat }))
       setData(map, 'fof-nav', navRoute ? navFeatures(navRoute, progress ?? 0) : EMPTY)
       if (!navRoute || !t) {
         setData(map, 'fof-nav-char', EMPTY)
@@ -260,6 +275,7 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     const muted = cssVar('--muted-foreground')
     map.setPaintProperty('fof-route-casing', 'line-color', bg)
     map.setPaintProperty('fof-route-alt', 'line-color', muted)
+    map.setPaintProperty('fof-route-link', 'line-color', cssVar('--foreground'))
     map.setPaintProperty('fof-route-done-casing', 'line-color', bg)
     map.setPaintProperty('fof-route-done', 'line-color', muted)
     map.setPaintProperty('fof-nav-step', 'circle-color', bg)
@@ -287,6 +303,38 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
       map.off('zoom', onZoom)
     }
   }, [map])
+
+  // Which area to label follows the camera, once it rests.
+  useEffect(() => {
+    if (!map) return
+    const update = () => {
+      const b = map.getBounds()
+      const next = gridCells([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()], map.getZoom())
+      setPoiBlocks(labelBlocks(map.getZoom()))
+      const key = (cells: BBox[]) => cells.map((c) => c.join(',')).sort().join('|')
+      setPoiCells((prev) => (key(prev) === key(next) ? prev : next))
+    }
+    update()
+    map.on('moveend', update)
+    return () => void map.off('moveend', update)
+  }, [map])
+
+  // Place names and icons in the map. Results and the selection are pins already: not drawn twice.
+  useEffect(() => {
+    if (!ready || swapping.current) return
+    const pinned = new Set(mapPlaces.places.map((p) => p.id))
+    setData(map, POI_SOURCE, poiCells.length ? poiFeatures(ambient, pinned) : EMPTY)
+    map.setPaintProperty(POI_LAYER, 'text-color', cssVar('--map-label'))
+    map.setPaintProperty(POI_LAYER, 'text-halo-color', cssVar('--map-label-halo'))
+  }, [ready, map, styleGen, ambient, poiCells, mapPlaces.places, theme])
+
+  // Category icons are images in the style: redraw them for each style (theme) load.
+  useEffect(() => {
+    if (!ready || swapping.current) return
+    const gen = styleGen
+    void installPoiIcons(map, // Light disc on the night map, dark disc by day: the icons must stand out from the buildings under them.
+      { disc: cssVar('--foreground'), glyph: cssVar('--background'), ring: cssVar('--background') }, () => !swapping.current && gen === styleGenRef.current)
+  }, [ready, map, styleGen])
 
   const heat = useMemo(() => demoRiskCells(), [])
   useEffect(() => {
@@ -321,6 +369,8 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     () => chromeInsets({ breakpoint, sheetSnap, panelOpen, routeActive, viewportW, viewportH }),
     [breakpoint, sheetSnap, panelOpen, routeActive, viewportW, viewportH],
   )
+  const selectedPlaceKey = mapPlaces.selected ? `${mapPlaces.selected.id}@${mapPlaces.selected.lngLat.join(',')}` : ''
+  const resultsKey = mapPlaces.places.slice(0, 8).map((p) => p.id).join('|')
   const fit = useMemo(() => {
     const known = fitPoints(routes, selection)
     if (known) return known
@@ -328,7 +378,10 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     if (mapPlaces.selected) return { kind: 'place' as const, points: [mapPlaces.selected.lngLat] }
     if (!selection && mapPlaces.places.length) return { kind: 'results' as const, points: mapPlaces.places.slice(0, 8).map((p) => p.lngLat) }
     return null
-  }, [routes, selection, mapPlaces.selected, mapPlaces.places])
+    // Keyed by WHAT is framed, not by object identity: the same place or result list arriving again
+    // (detail loaded, a refetch) must not pull the camera back after the user moved it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [routes, selection, selectedPlaceKey, resultsKey])
   const framed = useRef(false)
   const framedMode = useRef<MapMode | null>(null)
   useEffect(() => {
@@ -500,7 +553,13 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     return registerMapController({
       recenter: () => {
         const go = (at: LngLat) => map.easeTo({ center: at, zoom: Math.max(map.getZoom(), LOCATE_ZOOM), duration: live.current.reduce ? 0 : CAMERA_MS })
-        if (live.current.me) return go(live.current.me)
+        const here = live.current.me
+        if (here) {
+          // Already on you: the same button shows the campus instead, and the next press comes back.
+          const c = map.getCenter()
+          const onMe = metresApart(here, [c.lng, c.lat]) < RECENTER_TOGGLE_M
+          return onMe ? map.easeTo({ center: CAMPUS_CENTER, zoom: START_ZOOM, duration: live.current.reduce ? 0 : CAMERA_MS }) : go(here)
+        }
         // No position yet: this is the moment to ask (the browser prompt needs a user gesture on iOS).
         void requestLocation().then((fix) => {
           if (live.current.me) return go(live.current.me)
@@ -551,10 +610,15 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
         if (Math.hypot(at.x - e.point.x, at.y - e.point.y) <= TRAVELLER_TAP_PX) return resumeFollow()
       }
       if ((e.originalEvent.target as Element | null)?.closest?.('.maplibregl-marker')) return
+      // A place name or icon drawn in the map. A finger is not a cursor: accept a near miss.
+      const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: [POI_LAYER] })[0]
+      if (hit?.properties.id) return select({ kind: 'place', id: String(hit.properties.id) })
       const place = map.queryRenderedFeatures(e.point, { layers: ['fof-place-fill'] })[0]
       if (place?.properties.id) return select({ kind: 'building', id: String(place.properties.id) })
       const cell = map.queryRenderedFeatures(e.point, { layers: ['fof-heat'] })[0]
-      if (cell?.properties.cell) select({ kind: 'riskCell', id: String(cell.properties.cell) })
+      if (cell?.properties.cell) return select({ kind: 'riskCell', id: String(cell.properties.cell) })
+      // Blank map: let go of the selected place. Other views (directions, search, layers) are not dismissed by a stray tap.
+      if (s.view === 'place' && s.selection) select(null)
     }
     map.on('click', onClick)
     return () => void map.off('click', onClick)
@@ -609,10 +673,36 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
   const add = (layer: maplibregl.AddLayerObject) => {
     if (!map.getLayer(layer.id)) map.addLayer(layer, anchor)
   }
-  for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char']) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
+  for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char', POI_SOURCE]) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
   const arrow = arrowImage(cssVar('--background'))
   if (map.hasImage(NAV_ARROW)) map.updateImage(NAV_ARROW, arrow)
   else map.addImage(NAV_ARROW, arrow, { pixelRatio: 2 })
+
+  // Place names: on top of everything, sharing collision with the basemap's own labels.
+  const labelFont = layers.flatMap((l) => (l.type === 'symbol' && Array.isArray(l.layout?.['text-font']) ? [l.layout['text-font'] as string[]] : []))[0]
+  if (!map.getLayer(POI_LAYER))
+    map.addLayer({
+      id: POI_LAYER,
+      type: 'symbol',
+      source: POI_SOURCE,
+      layout: {
+        'icon-image': ['get', 'icon'],
+        'icon-size': 1,
+        // Close in, every place keeps at least its icon, even where two sit side by side.
+        'icon-allow-overlap': ['step', ['zoom'], false, 17, true],
+        'text-field': ['get', 'name'],
+        ...(labelFont ? { 'text-font': labelFont } : {}),
+        'text-size': 12,
+        'text-max-width': 9,
+        'text-anchor': 'left',
+        'text-offset': [1.2, 0],
+        'text-justify': 'left',
+        // The icon alone still marks the place when its name does not fit.
+        'text-optional': true,
+        'symbol-sort-key': ['get', 'rank'],
+      },
+      paint: { 'text-halo-width': 1.5 },
+    })
 
   add({ id: 'fof-heat', type: 'fill', source: 'fof-heat', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.32 } })
 
@@ -655,6 +745,8 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
   add({ id: 'fof-place-ring', type: 'line', source: 'fof-places', filter: ['==', ['get', 'selected'], true], paint: { 'line-width': 2 } })
 
   const round = { 'line-join': 'round', 'line-cap': 'round' } as const
+  // Dotted link from the route's end on the street to the place itself (a building's middle, a pin in a field).
+  add({ id: 'fof-route-link', type: 'line', source: 'fof-routes', layout: round, filter: ['==', ['get', 'role'], 'link'], paint: { 'line-width': 4, 'line-dasharray': [0.1, 2] } })
   add({ id: 'fof-route-alt', type: 'line', source: 'fof-routes', layout: round, filter: ['==', ['get', 'role'], 'alt'], paint: { 'line-width': 5, 'line-opacity': 0.55 } })
   // Travelled part while navigating: same casing, dimmed muted line.
   const done = ['==', ['get', 'role'], 'done'] as ExpressionSpecification

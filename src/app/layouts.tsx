@@ -122,7 +122,14 @@ export function TouchLayout({ tablet, footer }: { tablet: boolean; footer: React
   )
 }
 
-/** ≥ 1024px: collapsible left panel holds search and views; chips float over the map. */
+/** Move the caret into the side panel's search field once the opening panel can take focus. */
+function focusPanelSearch(tries = 8) {
+  const input = document.querySelector<HTMLInputElement>('[data-panel-search] input')
+  input?.focus()
+  if (document.activeElement !== input && tries > 0) setTimeout(() => focusPanelSearch(tries - 1), 80)
+}
+
+/** ≥ 1024px: collapsible left panel holds search and views; search stays on the map when the panel is closed. */
 export function DesktopLayout({ footer }: { footer: ReactNode }) {
   const open = useAppStore((s) => s.panelOpen)
   const setOpen = useAppStore((s) => s.setPanelOpen)
@@ -132,7 +139,16 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
 
   return (
     <>
-      <SidePanel open={open} onOpenChange={setOpen} label="Campus details" top={<MapSearch overMap={false} />}>
+      <SidePanel
+        open={open}
+        onOpenChange={setOpen}
+        label="Campus details"
+        top={
+          <div data-panel-search>
+            <MapSearch overMap={false} />
+          </div>
+        }
+      >
         <ViewHost footer={footer} />
       </SidePanel>
 
@@ -150,9 +166,21 @@ export function DesktopLayout({ footer }: { footer: ReactNode }) {
               <NavDevControl />
             </motion.div>
           ) : (
-            <motion.div key="chips" className="w-full" {...fade}>
+            <motion.div key="chips" className={cn('flex w-full flex-col gap-3', open ? 'items-start' : 'items-center')} {...fade}>
+              {/* Search is the main feature: with the panel closed it stays on the map. Focusing it opens the panel and moves the caret there. */}
+              {open ? null : (
+                <div className="pointer-events-auto w-[44rem] max-w-[calc(100vw-220px)]" data-testid="floating-search">
+                  <MapSearch
+                    onFocus={() => {
+                      setOpen(true)
+                      focusPanelSearch()
+                    }}
+                  />
+                </div>
+              )}
               {/* Left bleed only; the right edge fades under the mask. */}
-              <CategoryChips bleed={false} className={cn('pointer-events-auto -ml-4', open ? 'max-w-[calc(100vw-520px)]' : 'max-w-[calc(100vw-120px)]')} />
+              {/* Panel open: chips run from the left edge. Panel closed: centred under the wider search bar. */}
+              <CategoryChips bleed={false} className={cn('pointer-events-auto', open ? '-ml-4 max-w-[calc(100vw-520px)]' : 'w-fit max-w-[min(40rem,calc(100vw-260px))]')} />
             </motion.div>
           )}
         </AnimatePresence>

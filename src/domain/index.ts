@@ -177,6 +177,8 @@ export interface PlaceDetail extends Place {
   website?: string
   photoUrl?: string
   description?: string
+  /** Other names it is known by, e.g. a building code ("DML"). */
+  aliases: string[]
   reviews: PlaceReview[]
 }
 

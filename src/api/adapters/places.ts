@@ -8,7 +8,7 @@
  */
 import { z } from 'zod'
 import { apiFetch, ApiError } from '@/api/client'
-import { WEEKDAYS, type LngLat, type OpenSpan, type Place, type PlaceCategory, type PlaceDetail, type PlaceReview, type Weekday } from '@/domain'
+import { WEEKDAYS, type BBox, type LngLat, type OpenSpan, type Place, type PlaceCategory, type PlaceDetail, type PlaceReview, type Weekday } from '@/domain'
 
 export const SEARCH_PATH = '/api/v1/search'
 export const CATEGORIES_PATH = '/api/v1/search/categories'
@@ -71,12 +71,14 @@ export interface PlaceSearch {
   /** Top-level category ids. */
   category?: string
   near?: LngLat
+  /** Only places inside this box. */
+  bbox?: BBox
   limit?: number
 }
 
 export async function searchPlaces(s: PlaceSearch, signal?: AbortSignal): Promise<Place[]> {
   return parseSearch(
-    await apiFetch(SEARCH_PATH, { query: { q: s.q || undefined, category: s.category, near: s.near ? latLng(s.near) : undefined, limit: s.limit ?? 25 }, signal }),
+    await apiFetch(SEARCH_PATH, { query: { q: s.q || undefined, category: s.category, near: s.near ? latLng(s.near) : undefined, bbox: s.bbox?.join(','), limit: s.limit ?? 25 }, signal }),
   )
 }
 
@@ -101,6 +103,7 @@ const backendDetail = backendPlace.extend({
   photo_url: text,
   description: text,
   reviews: z.array(z.unknown()).nullish(),
+  aliases: z.array(z.unknown()).nullish(),
 })
 
 /** Scraped reviews come with whatever keys the scraper used. */
@@ -144,6 +147,7 @@ export function parsePlaceDetail(raw: unknown): PlaceDetail {
     website: safeUrl(d.website),
     photoUrl: safeUrl(d.photo_url),
     description: clean(d.description),
+    aliases: (d.aliases ?? []).filter((a): a is string => typeof a === 'string' && !!a.trim()),
     reviews: (d.reviews ?? []).flatMap(toReview).slice(0, 5),
   }
 }

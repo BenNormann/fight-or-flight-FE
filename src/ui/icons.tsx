@@ -19,6 +19,7 @@ const categoryIcon: Record<string, Icon> = {
   buildings: BuildingsIcon,
   food: ForkKnifeIcon,
   cafe: CoffeeIcon,
+  campus: BuildingsIcon,
   study: BookOpenIcon,
   parking: LetterCirclePIcon,
   events: CalendarDotsIcon,

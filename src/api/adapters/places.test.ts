@@ -26,11 +26,13 @@ describe('places adapter', () => {
       phone: ' (213) 555-0100 ',
       website: 'cafedulce.co',
       photo_url: 'javascript:alert(1)',
+      aliases: ['DML', 'Doheny', 7],
       reviews: [{ Name: 'A', Description: 'Great donuts', Rating: 5, When: '2 weeks ago' }, { nothing: true }, 'x'],
     })
     expect(d.hours?.monday).toEqual([{ open: '08:00', close: '22:00' }])
     expect(d.hours?.friday).toEqual([{ open: '18:00', close: '02:00', overnight: true }])
     expect(d.hours?.sunday).toEqual([])
+    expect(d.aliases).toEqual(['DML', 'Doheny'])
     expect(d.phone).toBe('(213) 555-0100')
     expect(d.website).toBe('https://cafedulce.co/')
     expect(d.photoUrl).toBeUndefined()

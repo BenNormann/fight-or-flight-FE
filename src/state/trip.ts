@@ -86,6 +86,8 @@ function useTripPlace(id: Id | null): TripPlace | null {
   }, [id, pinName, local?.id, fetched, seen])
 }
 
+const NO_ROUTES: Route[] = []
+
 let anchorAt: LngLat | null = null
 const anchorListeners = new Set<() => void>()
 const subscribeAnchor = (l: () => void) => {
@@ -143,7 +145,8 @@ export function useTrip(): Trip {
   return {
     from,
     to,
-    routes: status === 'ready' ? routes : [],
+    // The same empty list every time: a fresh one each render would look like new routes to the map.
+    routes: status === 'ready' ? routes : NO_ROUTES,
     status,
     message: status === 'error' ? routeErrorMessage(planned.error) : undefined,
     crowFliesM: from && to ? distanceM(from.lngLat, to.lngLat) : null,

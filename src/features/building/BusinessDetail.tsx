@@ -95,11 +95,21 @@ export function BusinessDetail({ id }: { id: Id }) {
     .filter(Boolean)
     .join(' · ')
   const day = today()
+  // Campus buildings are known by a short code; show it like the campus signs do.
+  const code = detail?.aliases.find((a) => /^[A-Z]{2,4}$/.test(a))
 
   return (
     <div data-testid="view-place" data-place-kind={place.kind}>
       <ViewHeader
-        eyebrow={kindLine}
+        eyebrow={
+          code ? (
+            <>
+              {kindLine} · <span className="font-mono">{code}</span>
+            </>
+          ) : (
+            kindLine
+          )
+        }
         title={place.name}
         subtitle={
           <>
