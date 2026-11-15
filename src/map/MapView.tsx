@@ -40,6 +40,7 @@ import {
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { followTraveller as resumeFollow, publishBearing, publishCentredOnUser, registerMapController } from './controller'
 import { floorHopFeatures } from './floorHop'
+import { PHONE_POINTS, phonePoleFeatures } from './phonePoles'
 import { CAMPUS_AREA, zoneAreas, zoneOutlines } from './zones'
 import { POI_LAYER, POI_SOURCE, labelBlocks, gridCells, installPoiIcons, poiFeatures } from './poiIcons'
 import { chromeInsets } from './insets'
@@ -85,6 +86,14 @@ const characterColors = (theme: MapTheme): CharacterColors =>
 const followBearing = (mode: MapMode, headingDeg: number) => (mode === '3d' ? headingDeg : cameraPresets[mode].bearing)
 
 const NO_CELLS: BBox[] = []
+
+/** The "Emergency phones" toggle in Map layers. */
+const PHONES_TOGGLE = 'demo-bluelights'
+/** Poles are drawn from this zoom; further out they would be a smear of dots. */
+const PHONES_MIN_ZOOM = 16
+/** Blue light blue: the lamp, and the glow at the pole's foot. */
+const PHONE_BLUE = '#4aa3ff'
+const PHONE_BOX_BLUE = '#1f6fe0'
 /** A new result list frames this many of its nearest places, not the whole list (which can span miles). */
 const FRAME_RESULTS = 8
 
@@ -347,6 +356,15 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     // `toAt` and `routeEnd` are compared by value below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, map, styleGen, toFloor, toAt?.[0], toAt?.[1], routeEnd?.[0], routeEnd?.[1], mapMode, theme])
+
+  // Emergency phone poles follow the "Emergency phones" switch in Map layers. 2D has no solids: only the glow shows.
+  const phonesOn = on(PHONES_TOGGLE)
+  useEffect(() => {
+    if (!ready || swapping.current || !map.getLayer('fof-phone-poles')) return
+    map.setLayoutProperty('fof-phones-glow', 'visibility', phonesOn ? 'visible' : 'none')
+    const show = phonesOn && mapMode !== '2d'
+    setData(map, 'fof-phone-poles', show ? phonePoleFeatures({ post: cssVar('--muted-foreground'), box: PHONE_BOX_BLUE, lamp: PHONE_BLUE }) : EMPTY)
+  }, [ready, map, styleGen, phonesOn, mapMode, theme])
 
   // Which area to label follows the camera, once it rests.
   useEffect(() => {
@@ -681,6 +699,9 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
         if (Math.hypot(at.x - e.point.x, at.y - e.point.y) <= TRAVELLER_TAP_PX) return resumeFollow()
       }
       if ((e.originalEvent.target as Element | null)?.closest?.('.maplibregl-marker')) return
+      // An emergency phone pole: say what it is (there is no sheet for it yet).
+      const phone = map.getLayer('fof-phones-glow') ? map.queryRenderedFeatures([[e.point.x - 12, e.point.y - 12], [e.point.x + 12, e.point.y + 12]], { layers: ['fof-phones-glow'] })[0] : undefined
+      if (phone) return notify({ id: 'phone', title: String(phone.properties.name ?? 'Emergency phone'), description: 'Blue light emergency phone. Press its button to reach USC Public Safety. In an emergency, call 911.' })
       // A place name or icon drawn in the map. A finger is not a cursor: accept a near miss.
       const hit = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: [POI_LAYER] })[0]
       if (hit?.properties.id) return select({ kind: 'place', id: String(hit.properties.id) })
@@ -745,6 +766,32 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
     if (!map.getLayer(layer.id)) map.addLayer(layer, anchor)
   }
   for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char', 'fof-floor', POI_SOURCE]) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
+  for (const [id, data] of [['fof-phone-poles', EMPTY], ['fof-phones', PHONE_POINTS]] as const) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data })
+  // Emergency phones: a small 3D pole on the ground, and a blue glow at its foot. The glow is a flat layer
+  // added on top, so it still shows where a building stands between the pole and the camera.
+  if (!map.getLayer('fof-phone-poles'))
+    map.addLayer({
+      id: 'fof-phone-poles',
+      type: 'fill-extrusion',
+      source: 'fof-phone-poles',
+      minzoom: PHONES_MIN_ZOOM,
+      paint: { 'fill-extrusion-color': ['get', 'color'], 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'height'], 'fill-extrusion-vertical-gradient': false },
+    })
+  if (!map.getLayer('fof-phones-glow'))
+    map.addLayer({
+      id: 'fof-phones-glow',
+      type: 'circle',
+      source: 'fof-phones',
+      minzoom: PHONES_MIN_ZOOM,
+      paint: {
+        'circle-color': PHONE_BLUE,
+        // Kept faint and small: there are dozens on campus, and they are a reference, not the subject.
+        'circle-radius': ['interpolate', ['linear'], ['zoom'], PHONES_MIN_ZOOM, 2.5, 18, 6],
+        'circle-blur': 0.7,
+        'circle-opacity': 0.5,
+        'circle-pitch-alignment': 'map',
+      },
+    })
   const arrow = arrowImage(cssVar('--background'))
   if (map.hasImage(NAV_ARROW)) map.updateImage(NAV_ARROW, arrow)
   else map.addImage(NAV_ARROW, arrow, { pixelRatio: 2 })
