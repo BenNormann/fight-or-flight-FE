@@ -3,7 +3,7 @@
  * rest of the pipeline (tracker, progress) does not know which.
  */
 import type { LngLat } from '@/domain'
-import { measure, pointAlong } from './geo'
+import { fromLocal, measure, pointAlong } from './geo'
 import type { RawFix } from './tracker'
 
 export const POSITION_SOURCES = ['simulated', 'device'] as const
@@ -20,6 +20,8 @@ export interface SimulatedWalkOptions {
   /** Read on every tick, so a speed control applies immediately. */
   speedMps: () => number
   paused?: () => boolean
+  /** Metres to the right of the route (negative: left), read on every tick: walks off the route to try rerouting. */
+  sidestepM?: () => number
   /** GPS-like: one fix a second. */
   intervalMs?: number
   /** Position noise, metres either way, so smoothing has something to do. */
@@ -47,7 +49,10 @@ export function simulatedWalk(path: LngLat[], o: SimulatedWalkOptions): Position
     const paused = o.paused?.() ?? false
     const speed = paused || along >= end ? 0 : o.speedMps()
     along = Math.min(end, along + speed * dt)
-    const { point, bearingDeg } = pointAlong(path, cum, along)
+    const { point: onRoute, bearingDeg } = pointAlong(path, cum, along)
+    const side = o.sidestepM?.() ?? 0
+    const b = ((bearingDeg + 90) * Math.PI) / 180
+    const point = side ? fromLocal(onRoute, side * Math.sin(b), side * Math.cos(b)) : onRoute
     const k = 1 / 111_320
     const noise = () => (random() * 2 - 1) * jitter * k
     return {
