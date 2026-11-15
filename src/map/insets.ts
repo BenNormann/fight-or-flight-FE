@@ -55,8 +55,9 @@ export function chromeInsets({ breakpoint, sheetSnap, panelOpen, routeActive, vi
   const sheet = sheetSnap === 'peek' ? SHEET_PEEK : sheetSnap === 'half' ? viewportH / 2 : viewportH
   return {
     top: TOUCH_TOP + pill,
-    // The control stack hides once the sheet is raised.
-    right: sheetSnap === 'peek' ? CONTROLS : GAP,
+    // The control stack hides once the sheet is raised. While navigating the sides stay even, so the
+    // traveller sits in the middle of the screen, not pushed left by the buttons.
+    right: sheetSnap === 'peek' && !routeActive ? CONTROLS : GAP,
     bottom: sheet + GAP,
     left: GAP,
   }

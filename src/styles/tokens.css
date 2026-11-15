@@ -73,6 +73,7 @@
   --map-land: #f3efe6;
   --map-block: #ebe5d8; /* campus ground, plazas */
   --map-building: #dccfb9;
+  --map-building-campus: #e9c9a4; /* campus buildings: the same tan, warmer */
   --map-building-edge: #b9a98c;
   --map-road: #ffffff;
   --map-path: #d9d2c3;
@@ -209,6 +210,7 @@
   --map-land: #181818;
   --map-block: #1f1f1f;
   --map-building: #313131;
+  --map-building-campus: #4a4034; /* campus buildings: a warm step up from the grey */
   --map-building-edge: #4a4640;
   --map-road: #272727;
   --map-path: #3a3a3a;

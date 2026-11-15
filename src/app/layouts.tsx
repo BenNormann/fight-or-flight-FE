@@ -91,7 +91,8 @@ export function TouchLayout({ tablet, footer }: { tablet: boolean; footer: React
         <AnimatePresence>
           {showLower ? (
             <motion.div key="stack" className="flex items-start justify-between gap-2 px-gutter" style={inset} {...fade}>
-              {active ? <NavDevControl /> : <span />}
+              {/* Always a first child (the dev control renders nothing in production), so the stack stays on the right. */}
+              <span>{active ? <NavDevControl /> : null}</span>
               <ControlStack />
             </motion.div>
           ) : null}

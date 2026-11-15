@@ -40,6 +40,7 @@ import {
 import { characterFeatures, characterFor, lerpAngle, lerpLngLat, type CharacterColors } from './characters'
 import { followTraveller as resumeFollow, publishBearing, publishCentredOnUser, registerMapController } from './controller'
 import { floorHopFeatures } from './floorHop'
+import { CAMPUS_AREA, zoneAreas, zoneOutlines } from './zones'
 import { POI_LAYER, POI_SOURCE, labelBlocks, gridCells, installPoiIcons, poiFeatures } from './poiIcons'
 import { chromeInsets } from './insets'
 import { installTouchTilt } from './touchTilt'
@@ -73,6 +74,8 @@ function setupMapLibre() {
 
 /** Token colours resolved for the current theme (MapLibre cannot read CSS variables). */
 const cssVar = (name: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
+/** Building colour: campus buildings (touching the campus area) get their own tint, the rest the plain one. */
+const buildingColor = (): ExpressionSpecification => ['case', ['<=', ['distance', CAMPUS_AREA], 0], cssVar('--map-building-campus'), cssVar('--map-building')]
 const riskPalette = (): RiskPalette => [1, 2, 3, 4, 5].map((i) => cssVar(`--risk-${i}`)) as unknown as RiskPalette
 /** Same rule as the "you are here" dot: cardinal by day, gold at night. */
 const characterColors = (theme: MapTheme): CharacterColors =>
@@ -395,8 +398,14 @@ function MapLibreView({ config }: { config: Pick<AppConfig, 'basemap' | 'center'
     map.setPaintProperty('fof-place-casing', 'line-color', cssVar('--background'))
     map.setPaintProperty('fof-place-ring', 'line-color', cssVar('--selected'))
     if (map.getLayer('fof-buildings')) {
-      map.setPaintProperty('fof-buildings', 'fill-extrusion-color', cssVar('--map-building'))
-      map.setPaintProperty('fof-buildings-flat', 'fill-color', cssVar('--map-building'))
+      map.setPaintProperty('fof-buildings', 'fill-extrusion-color', buildingColor())
+      map.setPaintProperty('fof-buildings-flat', 'fill-color', buildingColor())
+    }
+    if (map.getLayer('fof-zone-campus')) {
+      map.setPaintProperty('fof-zone-campus', 'line-color', cssVar('--brand-ink'))
+      map.setPaintProperty('fof-zone-dps', 'line-color', cssVar('--map-label'))
+      map.setPaintProperty('fof-zone-fill-campus', 'fill-color', cssVar('--brand-ink'))
+      map.setPaintProperty('fof-zone-fill-dps', 'fill-color', cssVar('--map-label'))
     }
   }, [ready, map, styleGen, selectedId, theme, livePlaces])
 
@@ -766,13 +775,18 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
       paint: { 'text-halo-width': 1.5 },
     })
 
+  // A faint tint on the ground inside each area. Added first, so it lies under the roads, paths and buildings.
+  if (!map.getSource('fof-zone-areas')) map.addSource('fof-zone-areas', { type: 'geojson', data: zoneAreas() })
+  add({ id: 'fof-zone-fill-dps', type: 'fill', source: 'fof-zone-areas', filter: ['==', ['get', 'zone'], 'dps'], paint: { 'fill-color': cssVar('--map-label'), 'fill-opacity': 0.05 } })
+  add({ id: 'fof-zone-fill-campus', type: 'fill', source: 'fof-zone-areas', filter: ['==', ['get', 'zone'], 'campus'], paint: { 'fill-color': cssVar('--brand-ink'), 'fill-opacity': 0.09 } })
+
   add({ id: 'fof-heat', type: 'fill', source: 'fof-heat', paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.32 } })
 
   if (buildings) {
     if (buildings.add && !map.getSource(buildings.source)) map.addSource(buildings.source, buildings.add)
     // Our footprints and extrusion replace the basemap's own building fill.
     for (const l of layers) if ('source-layer' in l && l['source-layer'] === 'building' && l.type === 'fill') map.setLayoutProperty(l.id, 'visibility', 'none')
-    const color = cssVar('--map-building')
+    const color = buildingColor()
     // Flat footprints: all of 2D, and Iso / 3D below the extrusion zoom (applyMode sets the range).
     add({
       id: 'fof-buildings-flat',
@@ -802,6 +816,13 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
   }
 
   anchor = aboveRoads
+  // Area outlines on the ground: the campus (solid, brand ink) and the DPS patrol area (dashed).
+  // Above the roads and buildings' footprints, below the route (whose layers are added after these).
+  if (!map.getSource('fof-zones')) map.addSource('fof-zones', { type: 'geojson', data: zoneOutlines() })
+  const isZone = (zone: string): ExpressionSpecification => ['==', ['get', 'zone'], zone]
+  add({ id: 'fof-zone-dps', type: 'line', source: 'fof-zones', filter: isZone('dps'), layout: { 'line-join': 'round' }, paint: { 'line-width': 2, 'line-dasharray': [3, 2], 'line-opacity': 0.75 } })
+  add({ id: 'fof-zone-campus', type: 'line', source: 'fof-zones', filter: isZone('campus'), layout: { 'line-join': 'round' }, paint: { 'line-width': 2.5, 'line-opacity': 0.9 } })
+
   add({ id: 'fof-place-fill', type: 'fill', source: 'fof-places', paint: { 'fill-color': '#000', 'fill-opacity': 0 } })
   add({ id: 'fof-place-casing', type: 'line', source: 'fof-places', filter: ['==', ['get', 'selected'], true], paint: { 'line-width': 6 } })
   add({ id: 'fof-place-ring', type: 'line', source: 'fof-places', filter: ['==', ['get', 'selected'], true], paint: { 'line-width': 2 } })
