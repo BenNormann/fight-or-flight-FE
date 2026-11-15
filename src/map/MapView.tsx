@@ -571,8 +571,13 @@ function setData(map: MlMap, source: string, data: GeoJSON.GeoJSON) {
 function installLayers(map: MlMap, buildings: BuildingSource | null) {
   const layers = map.getStyle().layers
   const beforeLabels = layers.find((l) => l.type === 'symbol')?.id
+  // Styles put some symbols (one-way arrows) in the middle of the road layers, so "before the first
+  // symbol" is still under bridges and footpaths. Routes go above every line and fill, under the labels that follow.
+  const lastShape = layers.findLastIndex((l) => l.type !== 'symbol' && !l.id.startsWith('fof-'))
+  const aboveRoads = layers.slice(lastShape + 1).find((l) => !l.id.startsWith('fof-'))?.id
+  let anchor = beforeLabels
   const add = (layer: maplibregl.AddLayerObject) => {
-    if (!map.getLayer(layer.id)) map.addLayer(layer, beforeLabels)
+    if (!map.getLayer(layer.id)) map.addLayer(layer, anchor)
   }
   for (const id of ['fof-heat', 'fof-places', 'fof-routes', 'fof-nav', 'fof-nav-char']) if (!map.getSource(id)) map.addSource(id, { type: 'geojson', data: EMPTY })
   const arrow = arrowImage(cssVar('--background'))
@@ -612,6 +617,7 @@ function installLayers(map: MlMap, buildings: BuildingSource | null) {
     })
   }
 
+  anchor = aboveRoads
   add({ id: 'fof-place-fill', type: 'fill', source: 'fof-places', paint: { 'fill-color': '#000', 'fill-opacity': 0 } })
   add({ id: 'fof-place-casing', type: 'line', source: 'fof-places', filter: ['==', ['get', 'selected'], true], paint: { 'line-width': 6 } })
   add({ id: 'fof-place-ring', type: 'line', source: 'fof-places', filter: ['==', ['get', 'selected'], true], paint: { 'line-width': 2 } })
